@@ -68,8 +68,6 @@ Currently, these files are in /proc/sys/vm:
 - zone_reclaim_mode
 - want_old_faultaround_pte
 
-==============================================================
-
 admin_reserve_kbytes
 
 The amount of free memory in the system that should be reserved for users
@@ -927,9 +925,8 @@ Allowing regular swap effectively restricts allocations to the local
 node unless explicitly overridden by memory policies or cpuset
 configurations.
 
-=============================================================
-
 want_old_faultaround_pte:
+========================
 
 By default faultaround code produces young pte. When want_old_faultaround_pte is
 set to 1, faultaround produces old ptes.
