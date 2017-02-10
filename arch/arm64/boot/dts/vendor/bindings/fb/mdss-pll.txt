@@ -21,6 +21,7 @@ Required properties:
 			"qcom,mdss_dsi_pll_28lpm", "qcom,mdss_dsi_pll_14nm",
 			"qcom,mdss_dp_pll_14nm", "qcom,mdss_hdmi_pll_28lpm",
 			"qcom,mdss_dsi_pll_7nm_v2", "qcom,mdss_dp_pll_sdm660",
+			"qcom,mdss_dsi_pll_sdm630",
 			"qcom,mdss_dsi_pll_sdm660", "qcom,mdss_dsi_pll_12nm"
 - cell-index:		Specifies the controller used
 - reg:			offset and length of the register set for the device.
