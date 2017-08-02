@@ -7,6 +7,13 @@
 #ifndef _RMNET_CONFIG_H_
 #define _RMNET_CONFIG_H_
 
+#include <linux/skbuff.h>
+
+struct rmnet_phys_ep_conf_s {
+	void (*recycle)(struct sk_buff *); /* Destruct function */
+	void *config;
+};
+
 struct rmnet_map_header_s {
 #ifndef RMNET_USE_BIG_ENDIAN_STRUCTS
 	uint8_t  pad_len:6;
