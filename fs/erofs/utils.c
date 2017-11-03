@@ -27,26 +27,8 @@ static atomic_long_t erofs_global_shrink_cnt;
 #define __erofs_workgroup_get(grp)	atomic_inc(&(grp)->refcount)
 #define __erofs_workgroup_put(grp)	atomic_dec(&(grp)->refcount)
 
-static int erofs_workgroup_get(struct erofs_workgroup *grp)
-{
-	int o;
-
-repeat:
-	o = erofs_wait_on_workgroup_freezed(grp);
-	if (o <= 0)
-		return -1;
-
-	if (atomic_cmpxchg(&grp->refcount, o, o + 1) != o)
-		goto repeat;
-
-	/* decrease refcount paired by erofs_workgroup_put */
-	if (o == 1)
-		atomic_long_dec(&erofs_global_shrink_cnt);
-	return 0;
-}
-
-struct erofs_workgroup *erofs_find_workgroup(struct super_block *sb,
-					     pgoff_t index)
+struct erofs_workgroup *erofs_find_workgroup(
+	struct super_block *sb, pgoff_t index, bool *tag)
 {
 	struct erofs_sb_info *sbi = EROFS_SB(sb);
 	struct erofs_workgroup *grp;
@@ -54,8 +36,11 @@ struct erofs_workgroup *erofs_find_workgroup(struct super_block *sb,
 repeat:
 	rcu_read_lock();
 	grp = radix_tree_lookup(&sbi->workstn_tree, index);
-	if (grp) {
-		if (erofs_workgroup_get(grp)) {
+	if (grp != NULL) {
+		*tag = xa_pointer_tag(grp);
+		grp = xa_untag_pointer(grp);
+
+		if (erofs_workgroup_get(grp, &oldcount)) {
 			/* prefer to relax rcu read side */
 			rcu_read_unlock();
 			goto repeat;
@@ -84,7 +69,9 @@ int erofs_register_workgroup(struct super_block *sb,
 		return err;
 
 	sbi = EROFS_SB(sb);
-	xa_lock(&sbi->workstn_tree);
+	erofs_workstn_lock(sbi);
+
+	grp = xa_tag_pointer(grp, tag);
 
 	/*
 	 * Bump up reference count before making this workgroup
@@ -173,7 +160,7 @@ repeat:
 				       batch, first_index, PAGEVEC_SIZE);
 
 	for (i = 0; i < found; ++i) {
-		struct erofs_workgroup *grp = batch[i];
+		struct erofs_workgroup *grp = xa_untag_pointer(batch[i]);
 
 		first_index = grp->index + 1;
 
