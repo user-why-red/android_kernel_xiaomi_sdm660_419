@@ -1023,6 +1023,8 @@ struct dev_links_info {
  * @state_synced: The hardware state of this device has been synced to match
  *		  the software state of this device by calling the driver/bus
  *		  sync_state() callback.
+ * @dma_coherent: this particular device is dma coherent, even if the
+ *		architecture supports non-coherent devices.
  *
  * At the lowest level, every device in a Linux system is represented by an
  * instance of struct device. The device structure contains the information
@@ -1114,6 +1116,11 @@ struct device {
 	bool			offline:1;
 	bool			of_node_reused:1;
 	bool			state_synced:1;
+#if defined(CONFIG_ARCH_HAS_SYNC_DMA_FOR_DEVICE) || \
+    defined(CONFIG_ARCH_HAS_SYNC_DMA_FOR_CPU) || \
+    defined(CONFIG_ARCH_HAS_SYNC_DMA_FOR_CPU_ALL)
+	bool			dma_coherent:1;
+#endif
 
 	struct list_head	iommu_map_list;
 	struct mutex		iommu_map_lock;
