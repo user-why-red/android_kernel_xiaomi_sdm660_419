@@ -664,6 +664,9 @@ struct fuse_conn {
 	/** Allow other than the mounter user to access the filesystem ? */
 	unsigned allow_other:1;
 
+	/** Does the filesystem support copy_file_range? */
+	unsigned no_copy_file_range:1;
+
 	/** Passthrough mode for read/write IO */
 	unsigned int passthrough:1;
 
