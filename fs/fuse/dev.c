@@ -27,6 +27,10 @@
 MODULE_ALIAS_MISCDEV(FUSE_MINOR);
 MODULE_ALIAS("devname:fuse");
 
+/* Ordinary requests have even IDs, while interrupts IDs are odd */
+#define FUSE_INT_REQ_BIT (1ULL << 0)
+#define FUSE_REQ_ID_STEP (1ULL << 1)
+
 static struct kmem_cache *fuse_req_cachep;
 
 static struct fuse_dev *fuse_get_dev(struct file *file)
@@ -325,7 +329,8 @@ static unsigned len_args(unsigned numargs, struct fuse_arg *args)
 
 static u64 fuse_get_unique(struct fuse_iqueue *fiq)
 {
-	return ++fiq->reqctr;
+	fiq->reqctr += FUSE_REQ_ID_STEP;
+	return fiq->reqctr;
 }
 
 static void queue_request(struct fuse_iqueue *fiq, struct fuse_req *req,
@@ -1128,7 +1133,7 @@ __releases(fiq->lock)
 	int err;
 
 	list_del_init(&req->intr_entry);
-	req->intr_unique = fuse_get_unique(fiq);
+	req->intr_unique = (req->in.h.unique | FUSE_INT_REQ_BIT);
 	memset(&ih, 0, sizeof(ih));
 	memset(&arg, 0, sizeof(arg));
 	ih.len = reqsize;
