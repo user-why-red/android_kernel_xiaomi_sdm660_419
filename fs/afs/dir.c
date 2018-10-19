@@ -555,7 +555,7 @@ static int afs_do_lookup_one(struct inode *dir, struct dentry *dentry,
 	}
 
 	*fid = cookie.fid;
-	_leave(" = 0 { vn=%u u=%u }", fid->vnode, fid->unique);
+	_leave(" = 0 { vn=%llu u=%u }", fid->vnode, fid->unique);
 	return 0;
 }
 
@@ -833,7 +833,7 @@ static struct dentry *afs_lookup(struct inode *dir, struct dentry *dentry,
 	struct key *key;
 	int ret;
 
-	_enter("{%x:%u},%p{%pd},",
+	_enter("{%llx:%llu},%p{%pd},",
 	       dvnode->fid.vid, dvnode->fid.vnode, dentry, dentry);
 
 	ASSERTCMP(d_inode(dentry), ==, NULL);
@@ -903,7 +903,7 @@ static int afs_d_revalidate(struct dentry *dentry, unsigned int flags)
 
 	if (d_really_is_positive(dentry)) {
 		vnode = AFS_FS_I(d_inode(dentry));
-		_enter("{v={%x:%u} n=%pd fl=%lx},",
+		_enter("{v={%llx:%llu} n=%pd fl=%lx},",
 		       vnode->fid.vid, vnode->fid.vnode, dentry,
 		       vnode->flags);
 	} else {
@@ -972,7 +972,7 @@ static int afs_d_revalidate(struct dentry *dentry, unsigned int flags)
 		/* if the vnode ID has changed, then the dirent points to a
 		 * different file */
 		if (fid.vnode != vnode->fid.vnode) {
-			_debug("%pd: dirent changed [%u != %u]",
+			_debug("%pd: dirent changed [%llu != %llu]",
 			       dentry, fid.vnode,
 			       vnode->fid.vnode);
 			goto not_found;
@@ -1112,7 +1112,7 @@ static int afs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 	mode |= S_IFDIR;
 
-	_enter("{%x:%u},{%pd},%ho",
+	_enter("{%llx:%llu},{%pd},%ho",
 	       dvnode->fid.vid, dvnode->fid.vnode, dentry, mode);
 
 	key = afs_request_key(dvnode->volume->cell);
@@ -1182,7 +1182,7 @@ static int afs_rmdir(struct inode *dir, struct dentry *dentry)
 	u64 data_version = dvnode->status.data_version;
 	int ret;
 
-	_enter("{%x:%u},{%pd}",
+	_enter("{%llx:%llu},{%pd}",
 	       dvnode->fid.vid, dvnode->fid.vnode, dentry);
 
 	key = afs_request_key(dvnode->volume->cell);
@@ -1274,7 +1274,7 @@ static int afs_unlink(struct inode *dir, struct dentry *dentry)
 	u64 data_version = dvnode->status.data_version;
 	int ret;
 
-	_enter("{%x:%u},{%pd}",
+	_enter("{%llx:%llu},{%pd}",
 	       dvnode->fid.vid, dvnode->fid.vnode, dentry);
 
 	if (dentry->d_name.len >= AFSNAMEMAX)
@@ -1338,7 +1338,7 @@ static int afs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	mode |= S_IFREG;
 
-	_enter("{%x:%u},{%pd},%ho,",
+	_enter("{%llx:%llu},{%pd},%ho,",
 	       dvnode->fid.vid, dvnode->fid.vnode, dentry, mode);
 
 	ret = -ENAMETOOLONG;
@@ -1401,7 +1401,7 @@ static int afs_link(struct dentry *from, struct inode *dir,
 	dvnode = AFS_FS_I(dir);
 	data_version = dvnode->status.data_version;
 
-	_enter("{%x:%u},{%x:%u},{%pd}",
+	_enter("{%llx:%llu},{%llx:%llu},{%pd}",
 	       vnode->fid.vid, vnode->fid.vnode,
 	       dvnode->fid.vid, dvnode->fid.vnode,
 	       dentry);
@@ -1472,7 +1472,7 @@ static int afs_symlink(struct inode *dir, struct dentry *dentry,
 	u64 data_version = dvnode->status.data_version;
 	int ret;
 
-	_enter("{%x:%u},{%pd},%s",
+	_enter("{%llx:%llu},{%pd},%s",
 	       dvnode->fid.vid, dvnode->fid.vnode, dentry,
 	       content);
 
@@ -1548,7 +1548,7 @@ static int afs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	orig_data_version = orig_dvnode->status.data_version;
 	new_data_version = new_dvnode->status.data_version;
 
-	_enter("{%x:%u},{%x:%u},{%x:%u},{%pd}",
+	_enter("{%llx:%llu},{%llx:%llu},{%llx:%llu},{%pd}",
 	       orig_dvnode->fid.vid, orig_dvnode->fid.vnode,
 	       vnode->fid.vid, vnode->fid.vnode,
 	       new_dvnode->fid.vid, new_dvnode->fid.vnode,
@@ -1615,7 +1615,7 @@ static int afs_dir_releasepage(struct page *page, gfp_t gfp_flags)
 {
 	struct afs_vnode *dvnode = AFS_FS_I(page->mapping->host);
 
-	_enter("{{%x:%u}[%lu]}", dvnode->fid.vid, dvnode->fid.vnode, page->index);
+	_enter("{{%llx:%llu}[%lu]}", dvnode->fid.vid, dvnode->fid.vnode, page->index);
 
 	set_page_private(page, 0);
 	ClearPagePrivate(page);

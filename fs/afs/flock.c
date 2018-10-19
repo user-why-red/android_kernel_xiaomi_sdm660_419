@@ -37,7 +37,7 @@ static inline void afs_set_lock_state(struct afs_vnode *vnode, enum afs_lock_sta
  */
 void afs_lock_may_be_available(struct afs_vnode *vnode)
 {
-	_enter("{%x:%u}", vnode->fid.vid, vnode->fid.vnode);
+	_enter("{%llx:%llu}", vnode->fid.vid, vnode->fid.vnode);
 
 	spin_lock(&vnode->lock);
 	if (vnode->lock_state == AFS_VNODE_LOCK_WAITING_FOR_CB)
@@ -130,7 +130,7 @@ static int afs_set_lock(struct afs_vnode *vnode, struct key *key,
 	struct afs_fs_cursor fc;
 	int ret;
 
-	_enter("%s{%x:%u.%u},%x,%u",
+	_enter("%s{%llx:%llu.%u},%x,%u",
 	       vnode->volume->name,
 	       vnode->fid.vid,
 	       vnode->fid.vnode,
@@ -161,7 +161,7 @@ static int afs_extend_lock(struct afs_vnode *vnode, struct key *key)
 	struct afs_fs_cursor fc;
 	int ret;
 
-	_enter("%s{%x:%u.%u},%x",
+	_enter("%s{%llx:%llu.%u},%x",
 	       vnode->volume->name,
 	       vnode->fid.vid,
 	       vnode->fid.vnode,
@@ -192,7 +192,7 @@ static int afs_release_lock(struct afs_vnode *vnode, struct key *key)
 	struct afs_fs_cursor fc;
 	int ret;
 
-	_enter("%s{%x:%u.%u},%x",
+	_enter("%s{%llx:%llu.%u},%x",
 	       vnode->volume->name,
 	       vnode->fid.vid,
 	       vnode->fid.vnode,
@@ -227,7 +227,7 @@ void afs_lock_work(struct work_struct *work)
 	struct key *key;
 	int ret;
 
-	_enter("{%x:%u}", vnode->fid.vid, vnode->fid.vnode);
+	_enter("{%llx:%llu}", vnode->fid.vid, vnode->fid.vnode);
 
 	spin_lock(&vnode->lock);
 
@@ -244,7 +244,7 @@ again:
 		ret = afs_release_lock(vnode, vnode->lock_key);
 		if (ret < 0)
 			printk(KERN_WARNING "AFS:"
-			       " Failed to release lock on {%x:%x} error %d\n",
+			       " Failed to release lock on {%llx:%llx} error %d\n",
 			       vnode->fid.vid, vnode->fid.vnode, ret);
 
 		spin_lock(&vnode->lock);
@@ -268,7 +268,7 @@ again:
 		key_put(key);
 
 		if (ret < 0)
-			pr_warning("AFS: Failed to extend lock on {%x:%x} error %d\n",
+			pr_warning("AFS: Failed to extend lock on {%llx:%llx} error %d\n",
 				   vnode->fid.vid, vnode->fid.vnode, ret);
 
 		spin_lock(&vnode->lock);
@@ -380,7 +380,7 @@ static int afs_do_setlk(struct file *file, struct file_lock *fl)
 	struct key *key = afs_file_key(file);
 	int ret;
 
-	_enter("{%x:%u},%u", vnode->fid.vid, vnode->fid.vnode, fl->fl_type);
+	_enter("{%llx:%llu},%u", vnode->fid.vid, vnode->fid.vnode, fl->fl_type);
 
 	fl->fl_ops = &afs_lock_ops;
 	INIT_LIST_HEAD(&fl->fl_u.afs.link);
@@ -571,7 +571,7 @@ static int afs_do_unlk(struct file *file, struct file_lock *fl)
 	struct afs_vnode *vnode = AFS_FS_I(locks_inode(file));
 	int ret;
 
-	_enter("{%x:%u},%u", vnode->fid.vid, vnode->fid.vnode, fl->fl_type);
+	_enter("{%llx:%llu},%u", vnode->fid.vid, vnode->fid.vnode, fl->fl_type);
 
 	/* Flush all pending writes before doing anything with locks. */
 	vfs_fsync(file, 0);
@@ -627,7 +627,7 @@ int afs_lock(struct file *file, int cmd, struct file_lock *fl)
 {
 	struct afs_vnode *vnode = AFS_FS_I(locks_inode(file));
 
-	_enter("{%x:%u},%d,{t=%x,fl=%x,r=%Ld:%Ld}",
+	_enter("{%llx:%llu},%d,{t=%x,fl=%x,r=%Ld:%Ld}",
 	       vnode->fid.vid, vnode->fid.vnode, cmd,
 	       fl->fl_type, fl->fl_flags,
 	       (long long) fl->fl_start, (long long) fl->fl_end);
@@ -650,7 +650,7 @@ int afs_flock(struct file *file, int cmd, struct file_lock *fl)
 {
 	struct afs_vnode *vnode = AFS_FS_I(locks_inode(file));
 
-	_enter("{%x:%u},%d,{t=%x,fl=%x}",
+	_enter("{%llx:%llu},%d,{t=%x,fl=%x}",
 	       vnode->fid.vid, vnode->fid.vnode, cmd,
 	       fl->fl_type, fl->fl_flags);
 
