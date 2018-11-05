@@ -7094,10 +7094,8 @@ static unsigned long cpu_util_without(int cpu, struct task_struct *p)
 		 * reducing the chances for the above race.
 		 */
 
-		if (unlikely(task_on_rq_queued(p) || current == p)) {
-			estimated -= min_t(unsigned int, estimated,
-					   _task_util_est(p));
-		}
+		if (unlikely(task_on_rq_queued(p) || current == p))
+			lsub_positive(&estimated, _task_util_est(p));
 
 		util = max(util, estimated);
 	}
