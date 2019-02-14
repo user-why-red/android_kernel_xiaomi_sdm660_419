@@ -3819,8 +3819,10 @@ void lockdep_init_map_waits(struct lockdep_map *lock, const char *name,
 		 * for a non static key
 		 */
 		lock->key = key;
-		if (debug_locks)
-			printk("BUG: key %px not in .data!\n", key);
+		printk(KERN_ERR "BUG: key %px has not been registered!\n", key);
+		/*
+		 * What it says above ^^^^^, I suggest you read it.
+		 */
 		lockdep_warn_on(1);
 		return;
 	}
