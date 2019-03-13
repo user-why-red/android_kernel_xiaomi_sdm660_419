@@ -23,6 +23,10 @@ config ZRAM_DEF_COMP_LZO
 	bool "lzo"
 	select CRYPTO_LZO
 
+config ZRAM_DEF_COMP_LZORLE
+	bool "lzo-rle"
+	select CRYPTO_LZO
+
 config ZRAM_DEF_COMP_ZSTD
 	bool "zstd"
 	select CRYPTO_ZSTD
@@ -36,6 +40,7 @@ endchoice
 config ZRAM_DEF_COMP
 	string
 	default "lzo" if ZRAM_DEF_COMP_LZO
+	default "lzo-rle" if ZRAM_DEF_COMP_LZORLE
 	default "zstd" if ZRAM_DEF_COMP_ZSTD
 	default "lz4" if ZRAM_DEF_COMP_LZ4
 
