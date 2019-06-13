@@ -2148,3 +2148,4 @@ EXPORT_SYMBOL(bpf_stats_enabled_key);
 #include <linux/bpf_trace.h>
 
 EXPORT_TRACEPOINT_SYMBOL_GPL(xdp_exception);
+EXPORT_TRACEPOINT_SYMBOL_GPL(xdp_bulk_tx);
