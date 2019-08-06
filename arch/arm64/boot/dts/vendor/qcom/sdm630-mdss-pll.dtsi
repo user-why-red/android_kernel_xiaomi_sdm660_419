@@ -23,6 +23,7 @@
 		clock-rate = <0>;
 		qcom,dsi-pll-ssc-en;
 		qcom,dsi-pll-ssc-mode = "down-spread";
+		memory-region = <&dfps_data_mem>;
 
 		qcom,platform-supply-entries {
 			#address-cells = <1>;
