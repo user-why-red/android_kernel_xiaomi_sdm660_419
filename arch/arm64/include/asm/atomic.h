@@ -52,16 +52,7 @@
 #define REFCOUNT_PRE_CHECK_ZERO(reg)	"ccmp " #reg ", wzr, #8, pl\n"
 #define REFCOUNT_PRE_CHECK_NONE(reg)
 
-#define __ARM64_IN_ATOMIC_IMPL
-
-#if defined(CONFIG_ARM64_LSE_ATOMICS) && defined(CONFIG_AS_LSE)
-#include <asm/atomic_lse.h>
-#else
-#include <asm/atomic_ll_sc.h>
-#endif
-
-#undef __ARM64_IN_ATOMIC_IMPL
-
+#include <asm/atomic_arch.h>
 #include <asm/cmpxchg.h>
 
 #define ATOMIC_INIT(i)	{ (i) }
