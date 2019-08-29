@@ -26,10 +26,6 @@
 
 #include <asm/barrier.h>
 #include <asm/brk-imm.h>
-#include <asm/lse.h>
-
-#ifdef __KERNEL__
-
 /*
  * To avoid having to allocate registers that pass the counter address and
  * address of the call site to the overflow handler, encode the register and
@@ -52,8 +48,87 @@
 #define REFCOUNT_PRE_CHECK_ZERO(reg)	"ccmp " #reg ", wzr, #8, pl\n"
 #define REFCOUNT_PRE_CHECK_NONE(reg)
 
-#include <asm/atomic_arch.h>
+#include <asm/lse.h>
+
+#ifdef __KERNEL__
+
 #include <asm/cmpxchg.h>
+
+#define ATOMIC_OP(op)							\
+static inline void arch_##op(int i, atomic_t *v)			\
+{									\
+	__lse_ll_sc_body(op, i, v);					\
+}
+
+ATOMIC_OP(atomic_andnot)
+ATOMIC_OP(atomic_or)
+ATOMIC_OP(atomic_xor)
+ATOMIC_OP(atomic_add)
+ATOMIC_OP(atomic_and)
+ATOMIC_OP(atomic_sub)
+
+
+#define ATOMIC_FETCH_OP(name, op)					\
+static inline int arch_##op##name(int i, atomic_t *v)			\
+{									\
+	return __lse_ll_sc_body(op##name, i, v);			\
+}
+
+#define ATOMIC_FETCH_OPS(op)						\
+	ATOMIC_FETCH_OP(_relaxed, op)					\
+	ATOMIC_FETCH_OP(_acquire, op)					\
+	ATOMIC_FETCH_OP(_release, op)					\
+	ATOMIC_FETCH_OP(        , op)
+
+ATOMIC_FETCH_OPS(atomic_fetch_andnot)
+ATOMIC_FETCH_OPS(atomic_fetch_or)
+ATOMIC_FETCH_OPS(atomic_fetch_xor)
+ATOMIC_FETCH_OPS(atomic_fetch_add)
+ATOMIC_FETCH_OPS(atomic_fetch_and)
+ATOMIC_FETCH_OPS(atomic_fetch_sub)
+ATOMIC_FETCH_OPS(atomic_add_return)
+ATOMIC_FETCH_OPS(atomic_sub_return)
+
+
+#define ATOMIC64_OP(op)							\
+static inline void arch_##op(long i, atomic64_t *v)			\
+{									\
+	__lse_ll_sc_body(op, i, v);					\
+}
+
+ATOMIC64_OP(atomic64_andnot)
+ATOMIC64_OP(atomic64_or)
+ATOMIC64_OP(atomic64_xor)
+ATOMIC64_OP(atomic64_add)
+ATOMIC64_OP(atomic64_and)
+ATOMIC64_OP(atomic64_sub)
+
+
+#define ATOMIC64_FETCH_OP(name, op)					\
+static inline long arch_##op##name(long i, atomic64_t *v)		\
+{									\
+	return __lse_ll_sc_body(op##name, i, v);			\
+}
+
+#define ATOMIC64_FETCH_OPS(op)						\
+	ATOMIC64_FETCH_OP(_relaxed, op)					\
+	ATOMIC64_FETCH_OP(_acquire, op)					\
+	ATOMIC64_FETCH_OP(_release, op)					\
+	ATOMIC64_FETCH_OP(        , op)
+
+ATOMIC64_FETCH_OPS(atomic64_fetch_andnot)
+ATOMIC64_FETCH_OPS(atomic64_fetch_or)
+ATOMIC64_FETCH_OPS(atomic64_fetch_xor)
+ATOMIC64_FETCH_OPS(atomic64_fetch_add)
+ATOMIC64_FETCH_OPS(atomic64_fetch_and)
+ATOMIC64_FETCH_OPS(atomic64_fetch_sub)
+ATOMIC64_FETCH_OPS(atomic64_add_return)
+ATOMIC64_FETCH_OPS(atomic64_sub_return)
+
+static inline long arch_atomic64_dec_if_positive(atomic64_t *v)
+{
+	return __lse_ll_sc_body(atomic64_dec_if_positive, v);
+}
 
 #define ATOMIC_INIT(i)	{ (i) }
 
@@ -182,6 +257,26 @@
 #define arch_atomic64_dec_if_positive		arch_atomic64_dec_if_positive
 
 #include <asm-generic/atomic-instrumented.h>
+
+static inline int __refcount_add_lt(int i, atomic_t *r)
+{
+	return __lse_ll_sc_body(__refcount_add_lt, i, r);
+}
+
+static inline int __refcount_sub_lt(int i, atomic_t *r)
+{
+	return __lse_ll_sc_body(__refcount_sub_lt, i, r);
+}
+
+static inline int __refcount_sub_le(int i, atomic_t *r)
+{
+	return __lse_ll_sc_body(__refcount_sub_le, i, r);
+}
+
+static inline int __refcount_add_not_zero(int i, atomic_t *r)
+{
+	return __lse_ll_sc_body(__refcount_add_not_zero, i, r);
+}
 
 #endif
 #endif
