@@ -7513,7 +7513,7 @@ static int nft_validate_register_load(enum nft_registers reg, unsigned int len)
 		return -EINVAL;
 	if (len == 0)
 		return -EINVAL;
-	if (reg * NFT_REG32_SIZE + len > FIELD_SIZEOF(struct nft_regs, data))
+	if (reg * NFT_REG32_SIZE + len > sizeof_field(struct nft_regs, data))
 		return -ERANGE;
 
 	return 0;
@@ -7582,7 +7582,7 @@ static int nft_validate_register_store(const struct nft_ctx *ctx,
 		if (len == 0)
 			return -EINVAL;
 		if (reg * NFT_REG32_SIZE + len >
-		    FIELD_SIZEOF(struct nft_regs, data))
+		    sizeof_field(struct nft_regs, data))
 			return -ERANGE;
 
 		return 0;
