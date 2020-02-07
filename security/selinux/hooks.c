@@ -874,7 +874,8 @@ static int selinux_set_mnt_opts(struct super_block *sb,
 	    !strcmp(sb->s_type->name, "binder") ||
 	    !strcmp(sb->s_type->name, "bpf") ||
 	    !strcmp(sb->s_type->name, "cgroup") ||
-	    !strcmp(sb->s_type->name, "cgroup2"))
+	    !strcmp(sb->s_type->name, "cgroup2") ||
+	    !strcmp(sb->s_type->name, "bpf"))
 		sbsec->flags |= SE_SBGENFS;
 
 	if (!sbsec->behavior) {
