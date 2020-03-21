@@ -133,6 +133,9 @@ struct lock_class {
 	short				wait_type_inner;
 	short				wait_type_outer;
 
+	short				wait_type_inner;
+	short				wait_type_outer;
+
 #ifdef CONFIG_LOCK_STAT
 	unsigned long			contention_point[LOCKSTAT_POINTS];
 	unsigned long			contending_point[LOCKSTAT_POINTS];
