@@ -1316,7 +1316,7 @@ static void retract_page_tables(struct address_space *mapping, pgoff_t pgoff)
 				 * mmap_sem in read mode.
 				 */
 				if (vma->anon_vma) {
-					up_write(&mm->mmap_sem);
+					up_write(&mm->mmap_lock);
 					continue;
 				}
 				mmu_notifier_invalidate_range_start(mm, addr,
