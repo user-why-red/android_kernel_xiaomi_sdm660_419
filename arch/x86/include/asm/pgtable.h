@@ -754,7 +754,7 @@ static inline int pmd_present(pmd_t pmd)
 #ifdef CONFIG_NUMA_BALANCING
 /*
  * These work without NUMA balancing but the kernel does not care. See the
- * comment in include/asm-generic/pgtable.h
+ * comment in include/linux/pgtable.h
  */
 static inline int pte_protnone(pte_t pte)
 {
@@ -1443,13 +1443,6 @@ static inline bool arch_has_pfn_modify_check(void)
 	return boot_cpu_has_bug(X86_BUG_L1TF);
 }
 
-#define arch_has_hw_pte_young arch_has_hw_pte_young
-static inline bool arch_has_hw_pte_young(void)
-{
-	return true;
-}
-
-#include <asm-generic/pgtable.h>
 #endif	/* __ASSEMBLY__ */
 
 #endif /* _ASM_X86_PGTABLE_H */
