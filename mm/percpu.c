@@ -1025,10 +1025,13 @@ static int pcpu_alloc_area(struct pcpu_chunk *chunk, int alloc_bits,
  *
  * This function determines the size of an allocation to free using
  * the boundary bitmap and clears the allocation map.
+ *
+ * RETURNS:
+ * Number of freed bytes.
  */
-static void pcpu_free_area(struct pcpu_chunk *chunk, int off)
+static int pcpu_free_area(struct pcpu_chunk *chunk, int off)
 {
-	int bit_off, bits, end, oslot;
+	int bit_off, bits, end, oslot, freed;
 
 	lockdep_assert_held(&pcpu_lock);
 	pcpu_stats_area_dealloc(chunk);
@@ -1043,8 +1046,10 @@ static void pcpu_free_area(struct pcpu_chunk *chunk, int off)
 	bits = end - bit_off;
 	bitmap_clear(chunk->alloc_map, bit_off, bits);
 
+	freed = bits * PCPU_MIN_ALLOC_SIZE;
+
 	/* update metadata */
-	chunk->free_bytes += bits * PCPU_MIN_ALLOC_SIZE;
+	chunk->free_bytes += freed;
 
 	/* update first free bit */
 	chunk->first_bit = min(chunk->first_bit, bit_off);
@@ -1052,6 +1057,8 @@ static void pcpu_free_area(struct pcpu_chunk *chunk, int off)
 	pcpu_block_update_hint_free(chunk, bit_off, bits);
 
 	pcpu_chunk_relocate(chunk, oslot);
+
+	return freed;
 }
 
 static void pcpu_init_md_blocks(struct pcpu_chunk *chunk)
