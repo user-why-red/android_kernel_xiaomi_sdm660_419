@@ -26,6 +26,7 @@
 
 /* sdm660-mtp.dtsi tulip specific diff */
 &mtp_batterydata {
+	qcom,batt-id-range-pct = <15>;
 	#include "fg-gen3-batterydata-l6660cos-4000mah.dtsi"
 	#include "fg-gen3-batterydata-l6660desay-4000mah.dtsi"
 	#include "fg-gen3-batterydata-l6660atl-4000mah.dtsi"

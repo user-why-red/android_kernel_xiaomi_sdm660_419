@@ -23,6 +23,7 @@
 
 /* sdm660-mtp.dtsi whyred specific diff */
 &mtp_batterydata {
+	qcom,batt-id-range-pct = <15>;
 	#include "fg-gen3-batterydata-l6650sun-4000mah.dtsi"
 	#include "fg-gen3-batterydata-l6650cos-4000mah.dtsi"
 	#include "fg-gen3-batterydata-l6650desay-4000mah.dtsi"

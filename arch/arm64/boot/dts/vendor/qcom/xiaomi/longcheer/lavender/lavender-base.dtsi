@@ -116,6 +116,7 @@
 
 /* sdm660-mtp.dtsi lavender specific diff */
 &mtp_batterydata {
+	qcom,batt-id-range-pct = <15>;
 	#include "fg-gen3-batterydata-m6100atl-4000mah.dtsi"
 	#include "fg-gen3-batterydata-m6100sun-4000mah.dtsi"
 	#include "fg-gen3-batterydata-m6100cos-4000mah.dtsi"
