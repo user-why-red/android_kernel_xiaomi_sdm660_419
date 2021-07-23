@@ -140,6 +140,8 @@ static void dma_buf_release(struct dentry *dentry)
 		reservation_object_fini(dmabuf->resv);
 
 	dma_buf_stats_teardown(dmabuf);
+
+	WARN_ON(!list_empty(&dmabuf->attachments));
 	module_put(dmabuf->owner);
 	dmabuf_dent_put(dmabuf);
 }
