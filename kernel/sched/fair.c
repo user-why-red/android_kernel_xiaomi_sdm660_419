@@ -12404,10 +12404,10 @@ static int idle_balance(struct rq *this_rq, struct rq_flags *rf)
 			avg_idle = this_rq->avg_idle;
 #endif
 
-		if (avg_idle < curr_cost + sd->max_newidle_lb_cost) {
-			update_next_balance(sd, &next_balance);
+		update_next_balance(sd, &next_balance);
+
+		if (avg_idle < curr_cost + sd->max_newidle_lb_cost)
 			break;
-		}
 
 		if (sd->flags & SD_BALANCE_NEWIDLE) {
 			pulled_task = load_balance(this_cpu, this_rq,
@@ -12422,8 +12422,6 @@ static int idle_balance(struct rq *this_rq, struct rq_flags *rf)
 			curr_cost += domain_cost;
 			t0 = t1;
 		}
-
-		update_next_balance(sd, &next_balance);
 
 		/*
 		 * Stop searching for tasks to pull if there are now runnable
