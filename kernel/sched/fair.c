@@ -12418,8 +12418,7 @@ static int idle_balance(struct rq *this_rq, struct rq_flags *rf)
 			t1 = sched_clock_cpu(this_cpu);
 			domain_cost = t1 - t0;
 
-			if (domain_cost > sd->max_newidle_lb_cost)
-				sd->max_newidle_lb_cost = domain_cost;
+			update_newidle_cost(sd, domain_cost);
 
 			curr_cost += domain_cost;
 			t0 = t1;
