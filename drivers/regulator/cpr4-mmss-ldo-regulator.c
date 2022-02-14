@@ -457,10 +457,10 @@ static void cpr4_mmss_print_settings(struct cpr3_regulator *vreg)
 	struct cpr3_corner *corner;
 	int i;
 
-	cpr3_debug(vreg, "Corner: Frequency (Hz), Fuse Corner, Floor (uV), Open-Loop (uV), Ceiling (uV)\n");
+	cpr3_info(vreg, "Corner: Frequency (Hz), Fuse Corner, Floor (uV), Open-Loop (uV), Ceiling (uV)\n");
 	for (i = 0; i < vreg->corner_count; i++) {
 		corner = &vreg->corner[i];
-		cpr3_debug(vreg, "%3d: %10u, %2d, %7d, %7d, %7d\n",
+		cpr3_info(vreg, "%3d: %10u, %2d, %7d, %7d, %7d\n",
 			i, corner->proc_freq, corner->cpr_fuse_corner,
 			corner->floor_volt, corner->open_loop_volt,
 			corner->ceiling_volt);
