@@ -208,15 +208,13 @@ static inline int select_pin_ctl(struct fpc1020_data *fpc1020, const char *name)
 				dev_err(dev, "cannot select '%s'\n", name);
 			else
 				dev_dbg(dev, "Selected '%s'\n", name);
-			goto exit;
+
+			return rc;
 		}
 	}
 
-	rc = -EINVAL;
 	dev_err(dev, "%s:'%s' not found\n", __func__, name);
-
-exit:
-	return rc;
+	return -EINVAL;
 }
 
 static inline ssize_t pinctl_set_store(struct device *dev,
@@ -276,31 +274,23 @@ static inline ssize_t regulator_enable_store(struct device *dev,
 }
 static DEVICE_ATTR_WO(regulator_enable);
 
-static inline int hw_reset(struct fpc1020_data *fpc1020)
+static inline void hw_reset(struct fpc1020_data *fpc1020)
 {
-	int irq_gpio;
-	int rc;
+	(void)gpio_get_value(fpc1020->irq_gpio);
 
-	rc = select_pin_ctl(fpc1020, "fpc1020_reset_active");
+	select_pin_ctl(fpc1020, "fpc1020_reset_active");
 
-	if (rc)
-		goto exit;
 	usleep_range(RESET_HIGH_SLEEP1_MIN_US, RESET_HIGH_SLEEP1_MAX_US);
 
-	rc = select_pin_ctl(fpc1020, "fpc1020_reset_reset");
-	if (rc)
-		goto exit;
+	select_pin_ctl(fpc1020, "fpc1020_reset_reset");
+
 	usleep_range(RESET_LOW_SLEEP_MIN_US, RESET_LOW_SLEEP_MAX_US);
 
-	rc = select_pin_ctl(fpc1020, "fpc1020_reset_active");
-	if (rc)
-		goto exit;
+	select_pin_ctl(fpc1020, "fpc1020_reset_active");
+
 	usleep_range(RESET_HIGH_SLEEP2_MIN_US, RESET_HIGH_SLEEP2_MAX_US);
 
-	irq_gpio = gpio_get_value(fpc1020->irq_gpio);
-
-exit:
-	return rc;
+	(void)gpio_get_value(fpc1020->irq_gpio);
 }
 
 static inline ssize_t hw_reset_store(struct device *dev, struct device_attribute *attr,
@@ -347,53 +337,36 @@ static inline void config_irq(struct fpc1020_data *fpc1020, bool enabled)
  * @note This function will not send any commands to the sensor it will only
  *       control it "electrically".
  */
-static inline int device_prepare(struct fpc1020_data *fpc1020, bool enable)
+static inline void device_prepare(struct fpc1020_data *fpc1020, bool enable)
 {
-	int rc;
-
 	mutex_lock(&fpc1020->lock);
 	if (enable && !fpc1020->prepared) {
 		fpc1020->prepared = true;
 		select_pin_ctl(fpc1020, "fpc1020_reset_reset");
 
-		rc = vreg_setup(fpc1020, VCC_SPI, true);
-		if (rc)
-			goto exit;
-
-		rc = vreg_setup(fpc1020, VDD_IO, true);
-		if (rc)
-			goto exit_1;
-
-		rc = vreg_setup(fpc1020, VDD_ANA, true);
-		if (rc)
-			goto exit_2;
+		vreg_setup(fpc1020, VCC_SPI, true);
+		vreg_setup(fpc1020, VDD_IO, true);
+		vreg_setup(fpc1020, VDD_ANA, true);
 
 		usleep_range(PWR_ON_SLEEP_MIN_US, PWR_ON_SLEEP_MAX_US);
 
-		/* As we can't control chip select here the other part of the
+		/* As we can't control chip, select here the other part of the
 		 * sensor driver eg. the TEE driver needs to do a _SOFT_ reset
 		 * on the sensor after power up to be sure that the sensor is
-		 * in a good state after power up. Okeyed by ASIC. */
-
-		(void)select_pin_ctl(fpc1020, "fpc1020_reset_active");
+		 * in a good state after power up. Acked by ASIC. */
+		select_pin_ctl(fpc1020, "fpc1020_reset_active");
 	} else if (!enable && fpc1020->prepared) {
-		rc = 0;
-		(void)select_pin_ctl(fpc1020, "fpc1020_reset_reset");
+		select_pin_ctl(fpc1020, "fpc1020_reset_reset");
 
 		usleep_range(PWR_ON_SLEEP_MIN_US, PWR_ON_SLEEP_MAX_US);
 
-		(void)vreg_setup(fpc1020, VDD_ANA, false);
-exit_2:
-		(void)vreg_setup(fpc1020, VDD_IO, false);
-exit_1:
-		(void)vreg_setup(fpc1020, VCC_SPI, false);
-exit:
-		fpc1020->prepared = false;
-	} else
-		rc = 0;
-	mutex_unlock(&fpc1020->lock);
+		vreg_setup(fpc1020, VDD_ANA, false);
+		vreg_setup(fpc1020, VDD_IO, false);
+		vreg_setup(fpc1020, VCC_SPI, false);
 
-	return rc;
+		fpc1020->prepared = false;
+	}
+	mutex_unlock(&fpc1020->lock);
 }
 
 /*
@@ -405,15 +378,15 @@ static inline ssize_t device_prepare_store(struct device *dev,
 					   struct device_attribute *attr,
 					   const char *buf, size_t count)
 {
-	int rc;
+	int rc = 0;
 	struct fpc1020_data *fpc1020 = dev_get_drvdata(dev);
 
 	if (!strcmp(buf, "enable"))
-		rc = device_prepare(fpc1020, true);
+		device_prepare(fpc1020, true);
 	else if (!strcmp(buf, "disable"))
-		rc = device_prepare(fpc1020, false);
+		device_prepare(fpc1020, false);
 	else
-		return -EINVAL;
+		rc = -EINVAL;
 
 	return rc ? rc : count;
 }
@@ -706,16 +679,17 @@ static inline int fpc1020_probe(struct platform_device *pdev)
 
 	rc = fpc1020_get_regulators(fpc1020);
 	if (rc)
-		goto exit;
+		return rc;
 
 	rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_irq",
 					&fpc1020->irq_gpio);
 	if (rc)
-		goto exit;
+		return -EINVAL;
+
 	rc = fpc1020_request_named_gpio(fpc1020, "fpc,gpio_rst",
 					&fpc1020->rst_gpio);
 	if (rc)
-		goto exit;
+		return -EINVAL;
 
 	fpc1020->fingerprint_pinctrl = devm_pinctrl_get(dev);
 	if (IS_ERR(fpc1020->fingerprint_pinctrl)) {
@@ -740,12 +714,8 @@ static inline int fpc1020_probe(struct platform_device *pdev)
 		fpc1020->pinctrl_state[i] = state;
 	}
 
-	rc = select_pin_ctl(fpc1020, "fpc1020_reset_reset");
-	if (rc)
-		goto exit;
-	rc = select_pin_ctl(fpc1020, "fpc1020_irq_active");
-	if (rc)
-		goto exit;
+	select_pin_ctl(fpc1020, "fpc1020_reset_reset");
+	select_pin_ctl(fpc1020, "fpc1020_irq_active");
 
 	atomic_set(&fpc1020->wakeup_enabled, 0);
 
@@ -758,7 +728,7 @@ static inline int fpc1020_probe(struct platform_device *pdev)
 		IRQF_TRIGGER_RISING | IRQF_ONESHOT,
 		dev_name(dev), fpc1020);
 	if (rc)
-		goto exit;
+		return rc;
 
 	/* Request that the interrupt should be wakeable */
 	enable_irq_wake(gpio_to_irq(fpc1020->irq_gpio));
@@ -773,22 +743,22 @@ static inline int fpc1020_probe(struct platform_device *pdev)
 	fpc1020->input_handler.id_table = ids;
 	rc = input_register_handler(&fpc1020->input_handler);
 	if (rc)
-		goto exit;
+		return rc;
 #endif
 
 	rc = sysfs_create_group(&dev->kobj, &attribute_group);
 	if (rc)
-		goto exit;
+		return rc;
 
 	if (of_property_read_bool(dev->of_node, "fpc,enable-on-boot"))
 		(void)device_prepare(fpc1020, true);
 
 	if (!dev->parent || !dev->parent->parent)
-		goto exit;
+		return rc;
 
 	platform_dev = dev->parent->parent;
 	if (strcmp(kobject_name(&platform_dev->kobj), "platform"))
-		goto exit;
+		return rc;
 
 	devices_node = platform_dev->kobj.sd->parent;
 	soc_kobj = &dev->parent->kobj;
@@ -801,7 +771,7 @@ static inline int fpc1020_probe(struct platform_device *pdev)
 	if (IS_ERR(soc_symlink))
 		dev_warn(dev, "Unable to create soc symlink\n");
 
-	rc = hw_reset(fpc1020);
+	hw_reset(fpc1020);
 
 	dev_info(dev, "%s: ok\n", __func__);
 	fpc1020->fb_black = false;
@@ -809,8 +779,7 @@ static inline int fpc1020_probe(struct platform_device *pdev)
 	fpc1020->fb_notifier = fpc_notif_block;
 	fb_register_client(&fpc1020->fb_notifier);
 
-exit:
-	return rc;
+	return 0;
 }
 
 static inline int fpc1020_remove(struct platform_device *pdev)
@@ -823,9 +792,9 @@ static inline int fpc1020_remove(struct platform_device *pdev)
 	sysfs_remove_group(&pdev->dev.kobj, &attribute_group);
 	mutex_destroy(&fpc1020->lock);
 	wakeup_source_unregister(fpc1020->ttw_ws);
-	(void)vreg_setup(fpc1020, VDD_ANA, false);
-	(void)vreg_setup(fpc1020, VDD_IO, false);
-	(void)vreg_setup(fpc1020, VCC_SPI, false);
+	vreg_setup(fpc1020, VDD_ANA, false);
+	vreg_setup(fpc1020, VDD_IO, false);
+	vreg_setup(fpc1020, VCC_SPI, false);
 
 	return 0;
 }
