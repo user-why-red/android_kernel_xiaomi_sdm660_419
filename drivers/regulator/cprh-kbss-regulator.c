@@ -426,6 +426,15 @@ sdm660_kbss_fuse_ref_volt[2][SDM660_KBSS_FUSE_CORNERS] = {
 #define SDM660_KBSS_PERFORMANCE_AGING_BYPASS_MASK0	0
 
 /*
+ * sdm630 configuration
+ */
+#define SDM630_KBSS_POWER_CPR_SENSOR_COUNT		6
+#define SDM630_KBSS_PERFORMANCE_CPR_SENSOR_COUNT	6
+
+/* For safety, the "custom voltage reduce" must <= 160mV */
+#define CUSTOM_VOLTAGE_REDUCE_LIMIT 160000
+
+/*
  * SOC IDs
  */
 enum soc_id {
@@ -761,6 +770,7 @@ static int cprh_kbss_calculate_open_loop_voltages(struct cpr3_regulator *vreg)
 	int *fmax_corner;
 	const char * const *corner_name;
 	enum soc_id soc_revision;
+	u32 custom_voltage_reduce;
 
 	fuse_volt = kcalloc(vreg->fuse_corner_count, sizeof(*fuse_volt),
 				GFP_KERNEL);
@@ -796,10 +806,24 @@ static int cprh_kbss_calculate_open_loop_voltages(struct cpr3_regulator *vreg)
 		goto done;
 	}
 
+	rc = of_property_read_u32(node, "qcom,custom-voltage-reduce",
+				  &custom_voltage_reduce);
+	if (rc < 0)
+		custom_voltage_reduce = 0;
+	else if (custom_voltage_reduce > CUSTOM_VOLTAGE_REDUCE_LIMIT)
+		custom_voltage_reduce = CUSTOM_VOLTAGE_REDUCE_LIMIT;
+	cpr3_info(vreg, "custom voltage reduce: %d uV\n", custom_voltage_reduce);
+
 	for (i = 0; i < vreg->fuse_corner_count; i++) {
-		fuse_volt[i] = cpr3_convert_open_loop_voltage_fuse(ref_volt[i],
-			CPRH_KBSS_FUSE_STEP_VOLT, fuse->init_voltage[i],
-			CPRH_KBSS_VOLTAGE_FUSE_SIZE);
+		fuse_volt[i] = cpr3_convert_open_loop_voltage_fuse(
+			ref_volt[i] - custom_voltage_reduce,
+			CPRH_KBSS_FUSE_STEP_VOLT,
+			fuse->init_voltage[i],
+			CPRH_KBSS_VOLTAGE_FUSE_SIZE
+		);
+		/* Also reduce both floor and ceiling voltages */
+		vreg->corner[i].floor_volt -= custom_voltage_reduce;
+		vreg->corner[i].ceiling_volt -= custom_voltage_reduce;
 
 		/* SDM660 speed bin #3 does not support TURBO_L1/L2 */
 		//if (soc_revision == SDM660_SOC_ID && vreg->speed_bin_fuse == 3
