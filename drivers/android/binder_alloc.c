@@ -234,7 +234,7 @@ static int binder_allocate_page_range(struct binder_alloc *alloc,
 		mm = alloc->vma_vm_mm;
 
 	if (mm) {
-		down_read(&mm->mmap_sem);
+		down_write(&mm->mmap_sem);
 		vma = alloc->vma;
 	}
 
@@ -290,7 +290,7 @@ static int binder_allocate_page_range(struct binder_alloc *alloc,
 		trace_binder_alloc_page_end(alloc, index);
 	}
 	if (mm) {
-		up_read(&mm->mmap_sem);
+		up_write(&mm->mmap_sem);
 		mmput_async(mm);
 	}
 	return 0;
@@ -303,7 +303,7 @@ err_page_ptr_cleared:
 	binder_free_page_range(alloc, start, page_addr);
 err_no_vma:
 	if (mm) {
-		up_read(&mm->mmap_sem);
+		up_write(&mm->mmap_sem);
 		mmput_async(mm);
 	}
 	return vma ? -ENOMEM : -ESRCH;
