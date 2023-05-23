@@ -2912,9 +2912,6 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags,
 	 * A similar smb_rmb() lives in try_invoke_on_locked_down_task().
 	 */
 	smp_rmb();
-	if (p->state & TASK_UNINTERRUPTIBLE)
-		trace_sched_blocked_reason(p);
-
 	if (READ_ONCE(p->on_rq)) {
 		if (ttwu_remote(p, wake_flags))
 			goto unlock;
