@@ -81,8 +81,6 @@
 		qcom,mdss-dsi-panel-status-value = <0x9c>;
 		qcom,mdss-dsi-panel-max-error-count = <3>;
 		qcom,panel-ack-disabled;
-		qcom,partial-update-enabled = "single_roi";
-		qcom,panel-roi-alignment = <540 270 270 270 1080 270>;
 		qcom,mdss-dsi-te-pin-select = <1>;
 		qcom,mdss-dsi-te-dcs-command = <1>;
 		qcom,mdss-dsi-te-check-enable;
