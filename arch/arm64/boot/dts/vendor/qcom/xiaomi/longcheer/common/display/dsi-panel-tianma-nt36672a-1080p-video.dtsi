@@ -102,13 +102,6 @@
 		qcom,panel-ack-disabled;
 		qcom,partial-update-enabled = "single_roi";
 		qcom,panel-roi-alignment = <540 270 270 270 1080 270>;
-		qcom,mdss-dsi-te-pin-select = <1>;
-		qcom,mdss-dsi-te-dcs-command = <1>;
-		qcom,mdss-dsi-te-check-enable;
-		qcom,mdss-dsi-te-using-te-pin;
-		qcom,mdss-tear-check-sync-init-val = <2280>;
-		qcom,mdss-tear-check-start-pos = <2280>;
-		qcom,mdss-tear-check-rd-ptr-trigger-intr = <2281>;
 		cm,mdss-livedisplay-cabc-ui-cmd = [
 			15 01 00 00 00 00 02 FF 23
 			15 00 00 00 00 00 02 FB 01
