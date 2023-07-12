@@ -57,6 +57,14 @@
 				status = "ok";
 				};
 			};
+			metadata {
+				compatible = "android,metadata";
+				dev = "/dev/block/by-name/logdump";
+				type = "ext4";
+				mnt_flags = "noatime,nosuid,nodev";
+				fsmgr_flags = "wait,check,formattable";
+				status = "ok";
+			};
 		};
 	};
 };
