@@ -79,13 +79,12 @@ struct vreg_config {
 	unsigned long vmin;
 	unsigned long vmax;
 	int ua_load;
-	bool is_optional;
 };
 
 static const struct vreg_config vreg_conf[] = {
-	{ "vdd_ana", 1800000UL, 1800000UL, 6000, true },
-	{ "vcc_spi", 1800000UL, 1800000UL, 10, true },
-	{ "vdd_io", 1800000UL, 1800000UL, 6000, true },
+	{ "vdd_ana", 1800000UL, 1800000UL, 6000 },
+	{ "vcc_spi", 1800000UL, 1800000UL, 10 },
+	{ "vdd_io", 1800000UL, 1800000UL, 6000 },
 };
 
 struct fpc1020_data {
@@ -624,12 +623,7 @@ static inline int fpc1020_get_regulators(struct fpc1020_data *fpc1020)
 	unsigned short i;
 
 	for (i = 0; i < FPC_VREG_MAX; i++) {
-		if (!vreg_conf[i].is_optional)
-			fpc1020->vreg[i] = devm_regulator_get_optional(
-						dev, vreg_conf[i].name);
-		else
-			fpc1020->vreg[i] = devm_regulator_get(
-						dev, vreg_conf[i].name);
+		fpc1020->vreg[i] = devm_regulator_get(dev, vreg_conf[i].name);
 
 		if (IS_ERR_OR_NULL(fpc1020->vreg[i])) {
 			fpc1020->vreg[i] = NULL;
