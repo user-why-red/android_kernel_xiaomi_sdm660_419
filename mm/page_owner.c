@@ -28,6 +28,7 @@ struct page_owner {
 static bool page_owner_disabled =
 	!IS_ENABLED(CONFIG_PAGE_OWNER_ENABLE_DEFAULT);
 DEFINE_STATIC_KEY_FALSE(page_owner_inited);
+EXPORT_SYMBOL_GPL(page_owner_inited);
 
 static depot_stack_handle_t dummy_handle;
 static depot_stack_handle_t failure_handle;
@@ -198,6 +199,7 @@ noinline void __set_page_owner(struct page *page, unsigned int order,
 	handle = save_stack(gfp_mask);
 	__set_page_owner_handle(page_ext, handle, order, gfp_mask);
 }
+EXPORT_SYMBOL_GPL(__set_page_owner);
 
 void __set_page_owner_migrate_reason(struct page *page, int reason)
 {
