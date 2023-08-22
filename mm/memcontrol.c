@@ -78,6 +78,7 @@ struct cgroup_subsys memory_cgrp_subsys __read_mostly;
 EXPORT_SYMBOL(memory_cgrp_subsys);
 
 struct mem_cgroup *root_mem_cgroup __read_mostly;
+EXPORT_SYMBOL_GPL(root_mem_cgroup);
 
 #define MEM_CGROUP_RECLAIM_RETRIES	5
 
