@@ -30,6 +30,22 @@
 
 DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 
+#ifdef CONFIG_SCHED_DEBUG
+/*
+ * Debugging: various feature bits
+ *
+ * If SCHED_DEBUG is disabled, each compilation unit has its own copy of
+ * sysctl_sched_features, defined in sched.h, to allow constants propagation
+ * at compile time and compiler optimization based on features default.
+ */
+#define SCHED_FEAT(name, enabled)	\
+	(1UL << __SCHED_FEAT_##name) * enabled |
+const_debug unsigned int sysctl_sched_features =
+#include "features.h"
+	0;
+#undef SCHED_FEAT
+#endif
+
 /*
  * Number of tasks to iterate in a single balance run.
  * Limited because this is done with IRQs disabled.
@@ -49,10 +65,6 @@ __read_mostly int scheduler_running;
  * default: 0.95s
  */
 int sysctl_sched_rt_runtime = 950000;
-
-#if defined(CONFIG_SONY_SCHED) && defined(CONFIG_NO_HZ_COMMON)
-cpumask_t cpu_wclaimed_mask;
-#endif
 
 /*
  * __task_rq_lock - lock the rq @p resides on.
@@ -236,9 +248,8 @@ static enum hrtimer_restart hrtick(struct hrtimer *timer)
 static void __hrtick_restart(struct rq *rq)
 {
 	struct hrtimer *timer = &rq->hrtick_timer;
-	ktime_t time = rq->hrtick_time;
 
-	hrtimer_start(timer, time, HRTIMER_MODE_ABS_PINNED);
+	hrtimer_start_expires(timer, HRTIMER_MODE_ABS_PINNED);
 }
 
 /*
@@ -263,6 +274,7 @@ static void __hrtick_start(void *arg)
 void hrtick_start(struct rq *rq, u64 delay)
 {
 	struct hrtimer *timer = &rq->hrtick_timer;
+	ktime_t time;
 	s64 delta;
 
 	/*
@@ -270,7 +282,9 @@ void hrtick_start(struct rq *rq, u64 delay)
 	 * doesn't make sense and can cause timer DoS.
 	 */
 	delta = max_t(s64, delay, 10000LL);
-	rq->hrtick_time = ktime_add_ns(timer->base->get_time(), delta);
+	time = ktime_add_ns(timer->base->get_time(), delta);
+
+	hrtimer_set_expires(timer, time);
 
 	if (rq == this_rq()) {
 		__hrtick_restart(rq);
@@ -1646,36 +1660,20 @@ static inline bool is_cpu_allowed(struct task_struct *p, int cpu)
 static struct rq *move_queued_task(struct rq *rq, struct rq_flags *rf,
 				   struct task_struct *p, int new_cpu)
 {
-#ifdef CONFIG_SONY_SCHED
-	int src_cpu = cpu_of(rq);
-#endif
-
 	lockdep_assert_held(&rq->lock);
 
 	WRITE_ONCE(p->on_rq, TASK_ON_RQ_MIGRATING);
 	dequeue_task(rq, p, DEQUEUE_NOCLOCK);
-#ifndef CONFIG_SONY_SCHED
 	double_lock_balance(rq, cpu_rq(new_cpu));
-#endif
 	if (!(rq->clock_update_flags & RQCF_UPDATED))
 		update_rq_clock(rq);
-#ifdef CONFIG_SONY_SCHED
-	walt_prepare_migrate(p, src_cpu, new_cpu, true);
-#endif
 	set_task_cpu(p, new_cpu);
-#ifdef CONFIG_SONY_SCHED
-	rq_unlock(rq, rf);
-#else
 	double_rq_unlock(cpu_rq(new_cpu), rq);
-#endif
 
 	rq = cpu_rq(new_cpu);
 
 	rq_lock(rq, rf);
 	BUG_ON(task_cpu(p) != new_cpu);
-#ifdef CONFIG_SONY_SCHED
-	walt_finish_migrate(p, src_cpu, new_cpu, true);
-#endif
 	enqueue_task(rq, p, 0);
 	p->on_rq = TASK_ON_RQ_QUEUED;
 	check_preempt_curr(rq, p, 0);
@@ -1942,9 +1940,7 @@ void set_task_cpu(struct task_struct *p, unsigned int new_cpu)
 		rseq_migrate(p);
 		perf_event_task_migrate(p);
 
-#ifndef CONFIG_SONY_SCHED
 		fixup_busy_time(p, new_cpu);
-#endif
 	}
 
 	__set_task_cpu(p, new_cpu);
@@ -1964,13 +1960,7 @@ static void __migrate_swap_task(struct task_struct *p, int cpu)
 
 		p->on_rq = TASK_ON_RQ_MIGRATING;
 		deactivate_task(src_rq, p, 0);
-#ifdef CONFIG_SONY_SCHED
-		walt_prepare_migrate(p, cpu_of(src_rq), cpu_of(dst_rq), true);
-#endif
 		set_task_cpu(p, cpu);
-#ifdef CONFIG_SONY_SCHED
-		walt_finish_migrate(p, cpu_of(src_rq), cpu_of(dst_rq), true);
-#endif
 		activate_task(dst_rq, p, 0);
 		p->on_rq = TASK_ON_RQ_QUEUED;
 		check_preempt_curr(dst_rq, p, 0);
@@ -2317,7 +2307,7 @@ out:
 		 * leave kernel.
 		 */
 		if (p->mm && printk_ratelimit()) {
-			pr_debug("process %d (%s) no longer affine to cpu%d\n",
+			printk_deferred("process %d (%s) no longer affine to cpu%d\n",
 					task_pid_nr(p), p->comm, cpu);
 		}
 	}
@@ -2356,9 +2346,6 @@ int select_task_rq(struct task_struct *p, int cpu, int sd_flags, int wake_flags,
 			(cpu_isolated(cpu) && !allow_isolated))
 		cpu = select_fallback_rq(task_cpu(p), p, allow_isolated);
 
-#if defined(CONFIG_SONY_SCHED) && defined(CONFIG_NO_HZ_COMMON)
-	cpumask_test_and_set_cpu(cpu, &cpu_wclaimed_mask);
-#endif
 	return cpu;
 }
 
@@ -2537,7 +2524,6 @@ static int ttwu_remote(struct task_struct *p, int wake_flags)
 }
 
 #ifdef CONFIG_SMP
-#if SCHED_FEAT_TTWU_QUEUE
 void sched_ttwu_pending(void)
 {
 	struct rq *rq = this_rq();
@@ -2556,7 +2542,6 @@ void sched_ttwu_pending(void)
 
 	rq_unlock_irqrestore(rq, &rf);
 }
-#endif
 
 void scheduler_ipi(void)
 {
@@ -2568,13 +2553,8 @@ void scheduler_ipi(void)
 	 */
 	preempt_fold_need_resched();
 
-#if SCHED_FEAT_TTWU_QUEUE
 	if (llist_empty(&this_rq()->wake_list) && !got_nohz_idle_kick())
 		return;
-#else
-	if (!got_nohz_idle_kick())
-		return;
-#endif
 
 	/*
 	 * Not all reschedule IPI handlers call irq_enter/irq_exit, since
@@ -2602,7 +2582,6 @@ void scheduler_ipi(void)
 	irq_exit();
 }
 
-#if SCHED_FEAT_TTWU_QUEUE
 static void ttwu_queue_remote(struct task_struct *p, int cpu, int wake_flags)
 {
 	struct rq *rq = cpu_rq(cpu);
@@ -2616,7 +2595,6 @@ static void ttwu_queue_remote(struct task_struct *p, int cpu, int wake_flags)
 			trace_sched_wake_idle_without_ipi(cpu);
 	}
 }
-#endif
 
 void wake_up_if_idle(int cpu)
 {
@@ -2651,37 +2629,22 @@ bool cpus_share_cache(int this_cpu, int that_cpu)
 }
 #endif /* CONFIG_SMP */
 
-#ifdef CONFIG_SONY_SCHED
-static void ttwu_queue(struct task_struct *p, int cpu, int prev_cpu, int wake_flags)
-#else
 static void ttwu_queue(struct task_struct *p, int cpu, int wake_flags)
-#endif
 {
 	struct rq *rq = cpu_rq(cpu);
 	struct rq_flags rf;
 
 #if defined(CONFIG_SMP)
-#if SCHED_FEAT_TTWU_QUEUE
-	if ((!idle_cpu(cpu) &&
-			!cpus_share_cache(smp_processor_id(), cpu)) ||
+	if ((sched_feat(TTWU_QUEUE) && !cpus_share_cache(smp_processor_id(), cpu)) ||
 			walt_want_remote_wakeup()) {
-#ifdef CONFIG_SONY_SCHED
-		if (prev_cpu != cpu)
-			walt_finish_migrate(p, prev_cpu, cpu, false);
-#endif
 		sched_clock_cpu(cpu); /* Sync clocks across CPUs */
 		ttwu_queue_remote(p, cpu, wake_flags);
 		return;
 	}
 #endif
-#endif
 
 	rq_lock(rq, &rf);
 	update_rq_clock(rq);
-#ifdef CONFIG_SONY_SCHED
-	if (prev_cpu != cpu)
-		walt_finish_migrate(p, prev_cpu, cpu, true);
-#endif
 	ttwu_do_activate(rq, p, wake_flags, &rf);
 	rq_unlock(rq, &rf);
 }
@@ -2826,9 +2789,6 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags,
 {
 	unsigned long flags;
 	int cpu, success = 0;
-#ifdef CONFIG_SONY_SCHED
-	int src_cpu;
-#endif
 
 	/*
 	 * If we are going to wake up a thread waiting for CONDITION we
@@ -2918,22 +2878,10 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags,
 
 	cpu = select_task_rq(p, p->wake_cpu, SD_BALANCE_WAKE, wake_flags,
 			     sibling_count_hint);
-#ifdef CONFIG_SONY_SCHED
-	src_cpu = task_cpu(p);
-	if (src_cpu != cpu) {
-#else
 	if (task_cpu(p) != cpu) {
-#endif
 		wake_flags |= WF_MIGRATED;
-#ifdef CONFIG_SONY_SCHED
-		walt_prepare_migrate(p, src_cpu, cpu, false);
-#endif
 		psi_ttwu_dequeue(p);
 		set_task_cpu(p, cpu);
-		/*
-		 * walt_finish_migrate is done in ttwu_queue
-		 * when CONFIG_SONY_SCHED=y
-		 */
 	}
 
 #else /* CONFIG_SMP */
@@ -2945,11 +2893,7 @@ try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags,
 
 #endif /* CONFIG_SMP */
 
-#ifdef CONFIG_SONY_SCHED
-	ttwu_queue(p, cpu, src_cpu, wake_flags);
-#else
 	ttwu_queue(p, cpu, wake_flags);
-#endif
 stat:
 	ttwu_stat(p, cpu, wake_flags);
 out:
@@ -3683,7 +3627,7 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 		/* Task is done with its stack. */
 		put_task_stack(prev);
 
-		put_task_struct(prev);
+		put_task_struct_rcu_user(prev);
 	}
 
 	tick_nohz_task_switch();
@@ -4322,7 +4266,13 @@ static noinline void __schedule_bug(struct task_struct *prev)
 		print_ip_sym(preempt_disable_ip);
 		pr_cont("\n");
 	}
-	panic("scheduling while atomic\n");
+	check_panic_on_warn("scheduling while atomic");
+
+#ifdef CONFIG_PANIC_ON_SCHED_BUG
+	BUG();
+#endif
+	dump_stack();
+	add_taint(TAINT_WARN, LOCKDEP_STILL_OK);
 }
 
 /*
@@ -5056,10 +5006,8 @@ int idle_cpu(int cpu)
 		return 0;
 
 #ifdef CONFIG_SMP
-#if SCHED_FEAT_TTWU_QUEUE
 	if (!llist_empty(&rq->wake_list))
 		return 0;
-#endif
 #endif
 
 	return 1;
@@ -8847,6 +8795,7 @@ void sched_exit(struct task_struct *p)
 	enqueue_task(rq, p, 0);
 	clear_ed_task(p, rq);
 	task_rq_unlock(rq, p, &rf);
+	free_task_load_ptrs(p);
 }
 #endif /* CONFIG_SCHED_WALT */
 
