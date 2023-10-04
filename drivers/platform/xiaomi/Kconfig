@@ -44,11 +44,3 @@ config MACH_XIAOMI_WAYNE
 	  Support for Xiaomi MI A2 and Mi 6X
 
 endmenu
-
-comment "Xiaomi Optimization Features"
-
-config PERF_HUMANTASK
-	bool "Xiaomi's perf humantask feature"
-	depends on MACH_XIAOMI
-	help
-	  Support for Xiaomi's perf humantask feature.
