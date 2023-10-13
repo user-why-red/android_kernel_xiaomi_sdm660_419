@@ -105,11 +105,11 @@ static inline void sanity_check_seg_type(struct f2fs_sb_info *sbi,
 	((sbi)->segs_per_sec * (sbi)->blocks_per_seg -		\
 	 (sbi)->unusable_blocks_per_sec)
 #define GET_SEC_FROM_SEG(sbi, segno)				\
-	(((segno) == -1) ? -1: (segno) / (sbi)->segs_per_sec)
+	(((segno) == -1) ? -1 : (segno) / (sbi)->segs_per_sec)
 #define GET_SEG_FROM_SEC(sbi, secno)				\
 	((secno) * (sbi)->segs_per_sec)
 #define GET_ZONE_FROM_SEC(sbi, secno)				\
-	(((secno) == -1) ? -1: (secno) / (sbi)->secs_per_zone)
+	(((secno) == -1) ? -1 : (secno) / (sbi)->secs_per_zone)
 #define GET_ZONE_FROM_SEG(sbi, segno)				\
 	GET_ZONE_FROM_SEC(sbi, GET_SEC_FROM_SEG(sbi, segno))
 
