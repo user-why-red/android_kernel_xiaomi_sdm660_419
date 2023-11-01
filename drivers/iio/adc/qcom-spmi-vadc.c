@@ -304,6 +304,9 @@ static int vadc_do_conversion(struct vadc_priv *vadc,
 	unsigned int timeout;
 	int ret;
 
+	if (!prop)
+		return -EINVAL;
+
 	mutex_lock(&vadc->lock);
 
 	ret = vadc_configure(vadc, prop);
