@@ -2438,11 +2438,6 @@ extern void set_rq_online (struct rq *rq);
 extern void set_rq_offline(struct rq *rq);
 extern bool sched_smp_initialized;
 
-/*
- * task_may_not_preempt - check whether a task may not be preemptible soon
- */
-extern bool task_may_not_preempt(struct task_struct *task, int cpu);
-
 #else /* CONFIG_SMP */
 
 /*
@@ -3317,3 +3312,15 @@ struct sched_avg_stats {
 	int nr_scaled;
 };
 extern void sched_get_nr_running_avg(struct sched_avg_stats *stats);
+
+/*
+ * task_may_not_preempt - check whether a task may not be preemptible soon
+ */
+#ifdef CONFIG_RT_SOFTINT_OPTIMIZATION
+extern bool task_may_not_preempt(struct task_struct *task, int cpu);
+#else
+static inline bool task_may_not_preempt(struct task_struct *task, int cpu)
+{
+	return false;
+}
+#endif /* CONFIG_RT_SOFTINT_OPTIMIZATION */
