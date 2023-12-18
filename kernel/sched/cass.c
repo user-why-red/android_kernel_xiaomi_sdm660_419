@@ -170,7 +170,6 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 		 * If @best == @curr then there's no need to compare them, but
 		 * cidx still needs to be changed to the other candidate slot.
 		 */
-		curr->cpu = cpu;
 		if (best == curr ||
 		    cass_cpu_better(curr, best, prev_cpu, sync)) {
 			best = curr;
