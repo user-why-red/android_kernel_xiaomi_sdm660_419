@@ -264,27 +264,6 @@ void *idr_get_next(struct idr *idr, int *nextid)
 {
 	unsigned long id = *nextid;
 	void *entry = idr_get_next_ul(idr, &id);
-	if (WARN_ON_ONCE(id > INT_MAX))
-		return NULL;
-	*nextid = id;
-	return entry;
-}
-EXPORT_SYMBOL(idr_get_next);
-
-/**
- * idr_get_next() - Find next populated entry.
- * @idr: IDR handle.
- * @nextid: Pointer to an ID.
- *
- * Returns the next populated entry in the tree with an ID greater than
- * or equal to the value pointed to by @nextid.  On exit, @nextid is updated
- * to the ID of the found value.  To use in a loop, the value pointed to by
- * nextid must be incremented by the user.
- */
-void *idr_get_next(struct idr *idr, int *nextid)
-{
-	unsigned long id = *nextid;
-	void *entry = idr_get_next_ul(idr, &id);
 
 	if (WARN_ON_ONCE(id > INT_MAX))
 		return NULL;
