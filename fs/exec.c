@@ -1877,6 +1877,7 @@ static int __do_execve_file(int fd, struct filename *filename,
 	}
 
 	retval = exec_binprm(&bprm);
+
 	if (retval < 0)
 		goto out;
 
