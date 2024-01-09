@@ -1745,6 +1745,20 @@ void part_round_stats(struct request_queue *q, int cpu, struct hd_struct *part)
 }
 EXPORT_SYMBOL_GPL(part_round_stats);
 
+#ifdef CONFIG_PM
+static void blk_pm_put_request(struct request *rq)
+{
+	if (rq->q->dev && !(rq->rq_flags & RQF_PM) &&
+	    (rq->rq_flags & RQF_PM_ADDED)) {
+		rq->rq_flags &= ~RQF_PM_ADDED;
+		if (!--rq->q->nr_pending)
+			pm_runtime_mark_last_busy(rq->q->dev);
+	}
+}
+#else
+static inline void blk_pm_put_request(struct request *rq) {}
+#endif
+
 void __blk_put_request(struct request_queue *q, struct request *req)
 {
 	req_flags_t rq_flags = req->rq_flags;
@@ -2768,9 +2782,10 @@ void blk_account_io_done(struct request *req, u64 now)
 		cpu = part_stat_lock();
 		part = req->part;
 
+		update_io_ticks(part, jiffies);
 		part_stat_inc(cpu, part, ios[sgrp]);
 		part_stat_add(cpu, part, nsecs[sgrp], now - req->start_time_ns);
-		part_round_stats(req->q, cpu, part);
+		part_stat_add(cpu, part, time_in_queue, nsecs_to_jiffies64(now - req->start_time_ns));
 		part_dec_in_flight(req->q, part, rq_data_dir(req));
 
 		hd_struct_put(part);
@@ -2830,10 +2845,11 @@ void blk_account_io_start(struct request *rq, bool new_io)
 			part = &rq->rq_disk->part0;
 			hd_struct_get(part);
 		}
-		part_round_stats(rq->q, cpu, part);
 		part_inc_in_flight(rq->q, part, rw);
 		rq->part = part;
 	}
+
+	update_io_ticks(part, jiffies);
 
 	part_stat_unlock();
 }
