@@ -304,9 +304,16 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 	}
 
 	if (IS_DIRSYNC(dir))
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 19, 0)
 		return sync_blockdev_range(sb->s_bdev,
 				EXFAT_BLK_TO_B(blknr, sb),
 				EXFAT_BLK_TO_B(last_blknr, sb) - 1);
+#else
+		return filemap_write_and_wait_range(sb->s_bdev->bd_inode->i_mapping,
+				EXFAT_BLK_TO_B(blknr, sb),
+				EXFAT_BLK_TO_B(last_blknr, sb) - 1);
+#endif
+
 
 	return 0;
 }
@@ -315,7 +322,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		struct exfat_chain *p_chain, bool sync_bmap)
 {
 	int ret = -ENOSPC;
-	unsigned int total_cnt;
+	unsigned int num_clusters = 0, total_cnt;
 	unsigned int hint_clu, new_clu, last_clu = EXFAT_EOF_CLUSTER;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -352,11 +359,17 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 
 	/* check cluster validation */
 	if (!is_valid_cluster(sbi, hint_clu)) {
-		if (hint_clu != sbi->num_clusters)
-			exfat_err(sb, "hint_cluster is invalid (%u), rewind to the first cluster",
-					hint_clu);
+		exfat_err(sb, "hint_cluster is invalid (%u)",
+			hint_clu);
 		hint_clu = EXFAT_FIRST_CLUSTER;
-		p_chain->flags = ALLOC_FAT_CHAIN;
+		if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
+			if (exfat_chain_cont_cluster(sb, p_chain->dir,
+					num_clusters)) {
+				ret = -EIO;
+				goto unlock;
+			}
+			p_chain->flags = ALLOC_FAT_CHAIN;
+		}
 	}
 
 	p_chain->dir = EXFAT_EOF_CLUSTER;
@@ -366,7 +379,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		if (new_clu != hint_clu &&
 		    p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 			if (exfat_chain_cont_cluster(sb, p_chain->dir,
-					p_chain->size)) {
+					num_clusters)) {
 				ret = -EIO;
 				goto free_cluster;
 			}
@@ -378,6 +391,8 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 			ret = -EIO;
 			goto free_cluster;
 		}
+
+		num_clusters++;
 
 		/* update FAT table */
 		if (p_chain->flags == ALLOC_FAT_CHAIN) {
@@ -395,14 +410,13 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 				goto free_cluster;
 			}
 		}
-		p_chain->size++;
-
 		last_clu = new_clu;
 
-		if (p_chain->size == num_alloc) {
+		if (--num_alloc == 0) {
 			sbi->clu_srch_ptr = hint_clu;
-			sbi->used_clusters += num_alloc;
+			sbi->used_clusters += num_clusters;
 
+			p_chain->size += num_clusters;
 			mutex_unlock(&sbi->bitmap_lock);
 			return 0;
 		}
@@ -413,7 +427,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 
 			if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 				if (exfat_chain_cont_cluster(sb, p_chain->dir,
-						p_chain->size)) {
+						num_clusters)) {
 					ret = -EIO;
 					goto free_cluster;
 				}
@@ -422,7 +436,8 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		}
 	}
 free_cluster:
-	__exfat_free_cluster(inode, p_chain);
+	if (num_clusters)
+		__exfat_free_cluster(inode, p_chain);
 unlock:
 	mutex_unlock(&sbi->bitmap_lock);
 	return ret;

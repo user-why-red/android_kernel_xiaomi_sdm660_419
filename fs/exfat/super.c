@@ -22,7 +22,6 @@
 #include <linux/fs_struct.h>
 #include <linux/nls.h>
 #include <linux/buffer_head.h>
-#include <linux/magic.h>
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 16, 0)
 #include <linux/iversion.h>
@@ -103,7 +102,8 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_blocks = sbi->num_clusters - 2; /* clu 0 & 1 */
 	buf->f_bfree = buf->f_blocks - sbi->used_clusters;
 	buf->f_bavail = buf->f_bfree;
-	buf->f_fsid = u64_to_fsid(id);
+	buf->f_fsid.val[0] = (unsigned int)id;
+	buf->f_fsid.val[1] = (unsigned int)(id >> 32);
 	/* Unicode utf16 255 characters */
 	buf->f_namelen = EXFAT_MAX_FILE_LEN * NLS_MAX_CHARSET_SIZE;
 	return 0;
@@ -632,7 +632,8 @@ static int exfat_read_root(struct inode *inode)
 	inode->i_op = &exfat_dir_inode_operations;
 	inode->i_fop = &exfat_dir_operations;
 
-	inode->i_blocks = round_up(i_size_read(inode), sbi->cluster_size) >> 9;
+	inode->i_blocks = round_up(i_size_read(inode), sbi->cluster_size) >>
+				inode->i_blkbits;
 	ei->i_pos = ((loff_t)sbi->root_dir << 32) | 0xffffffff;
 	ei->i_size_aligned = i_size_read(inode);
 	ei->i_size_ondisk = i_size_read(inode);
