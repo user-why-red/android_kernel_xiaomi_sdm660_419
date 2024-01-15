@@ -170,6 +170,19 @@ TRACE_DEFINE_ENUM(EX_BLOCK_AGE);
 		{ EX_READ,	"Read" },				\
 		{ EX_BLOCK_AGE,	"Block Age" })
 
+#define show_inode_type(x) \
+	__print_symbolic(x, \
+		{ S_IFLNK,		"symbolic" }, \
+		{ S_IFREG,		"regular" }, \
+		{ S_IFDIR,		"directory" }, \
+		{ S_IFCHR,		"character" }, \
+		{ S_IFBLK,		"block" }, \
+		{ S_IFIFO,		"fifo" }, \
+		{ S_IFSOCK,		"sock" })
+
+#define S_ALL_PERM	(S_ISUID | S_ISGID | S_ISVTX |	\
+			S_IRWXU | S_IRWXG | S_IRWXO)
+
 struct f2fs_sb_info;
 struct f2fs_io_info;
 struct extent_info;
@@ -224,17 +237,21 @@ DECLARE_EVENT_CLASS(f2fs__inode_exit,
 	TP_STRUCT__entry(
 		__field(dev_t,	dev)
 		__field(ino_t,	ino)
+		__field(umode_t, mode)
 		__field(int,	ret)
 	),
 
 	TP_fast_assign(
 		__entry->dev	= inode->i_sb->s_dev;
 		__entry->ino	= inode->i_ino;
+		__entry->mode	= inode->i_mode;
 		__entry->ret	= ret;
 	),
 
-	TP_printk("dev = (%d,%d), ino = %lu, ret = %d",
+	TP_printk("dev = (%d,%d), ino = %lu, type: %s, mode = 0%o, ret = %d",
 		show_dev_ino(__entry),
+		show_inode_type(__entry->mode & S_IFMT),
+		__entry->mode & S_ALL_PERM,
 		__entry->ret)
 );
 
@@ -578,10 +595,10 @@ TRACE_EVENT(f2fs_file_write_iter,
 );
 
 TRACE_EVENT(f2fs_map_blocks,
-	TP_PROTO(struct inode *inode, struct f2fs_map_blocks *map,
-				int create, int flag, int ret),
+	TP_PROTO(struct inode *inode, struct f2fs_map_blocks *map, int flag,
+		 int ret),
 
-	TP_ARGS(inode, map, create, flag, ret),
+	TP_ARGS(inode, map, flag, ret),
 
 	TP_STRUCT__entry(
 		__field(dev_t,	dev)
@@ -593,7 +610,6 @@ TRACE_EVENT(f2fs_map_blocks,
 		__field(int,	m_seg_type)
 		__field(bool,	m_may_create)
 		__field(bool,	m_multidev_dio)
-		__field(int,	create)
 		__field(int,	flag)
 		__field(int,	ret)
 	),
@@ -608,7 +624,6 @@ TRACE_EVENT(f2fs_map_blocks,
 		__entry->m_seg_type	= map->m_seg_type;
 		__entry->m_may_create	= map->m_may_create;
 		__entry->m_multidev_dio	= map->m_multidev_dio;
-		__entry->create		= create;
 		__entry->flag		= flag;
 		__entry->ret		= ret;
 	),
@@ -616,7 +631,7 @@ TRACE_EVENT(f2fs_map_blocks,
 	TP_printk("dev = (%d,%d), ino = %lu, file offset = %llu, "
 		"start blkaddr = 0x%llx, len = 0x%llx, flags = %u, "
 		"seg_type = %d, may_create = %d, multidevice = %d, "
-		"create = %d, flag = %d, err = %d",
+		"flag = %d, err = %d",
 		show_dev_ino(__entry),
 		(unsigned long long)__entry->m_lblk,
 		(unsigned long long)__entry->m_pblk,
@@ -625,7 +640,6 @@ TRACE_EVENT(f2fs_map_blocks,
 		__entry->m_seg_type,
 		__entry->m_may_create,
 		__entry->m_multidev_dio,
-		__entry->create,
 		__entry->flag,
 		__entry->ret)
 );
@@ -1293,37 +1307,87 @@ DEFINE_EVENT(f2fs__page, f2fs_set_page_dirty,
 	TP_ARGS(page, type)
 );
 
-DEFINE_EVENT(f2fs__page, f2fs_vm_page_mkwrite,
+TRACE_EVENT(f2fs_replace_atomic_write_block,
 
-	TP_PROTO(struct page *page, int type),
+	TP_PROTO(struct inode *inode, struct inode *cow_inode, pgoff_t index,
+			block_t old_addr, block_t new_addr, bool recovery),
 
-	TP_ARGS(page, type)
+	TP_ARGS(inode, cow_inode, index, old_addr, new_addr, recovery),
+
+	TP_STRUCT__entry(
+		__field(dev_t,	dev)
+		__field(ino_t,	ino)
+		__field(ino_t,	cow_ino)
+		__field(pgoff_t, index)
+		__field(block_t, old_addr)
+		__field(block_t, new_addr)
+		__field(bool, recovery)
+	),
+
+	TP_fast_assign(
+		__entry->dev		= inode->i_sb->s_dev;
+		__entry->ino		= inode->i_ino;
+		__entry->cow_ino	= cow_inode->i_ino;
+		__entry->index		= index;
+		__entry->old_addr	= old_addr;
+		__entry->new_addr	= new_addr;
+		__entry->recovery	= recovery;
+	),
+
+	TP_printk("dev = (%d,%d), ino = %lu, cow_ino = %lu, index = %lu, "
+			"old_addr = 0x%llx, new_addr = 0x%llx, recovery = %d",
+		show_dev_ino(__entry),
+		__entry->cow_ino,
+		(unsigned long)__entry->index,
+		(unsigned long long)__entry->old_addr,
+		(unsigned long long)__entry->new_addr,
+		__entry->recovery)
 );
 
-TRACE_EVENT(f2fs_filemap_fault,
+DECLARE_EVENT_CLASS(f2fs_mmap,
 
-	TP_PROTO(struct inode *inode, pgoff_t index, unsigned long ret),
+	TP_PROTO(struct inode *inode, pgoff_t index,
+			vm_flags_t flags, vm_fault_t ret),
 
-	TP_ARGS(inode, index, ret),
+	TP_ARGS(inode, index, flags, ret),
 
 	TP_STRUCT__entry(
 		__field(dev_t,	dev)
 		__field(ino_t,	ino)
 		__field(pgoff_t, index)
-		__field(unsigned long, ret)
+		__field(vm_flags_t, flags)
+		__field(vm_fault_t, ret)
 	),
 
 	TP_fast_assign(
 		__entry->dev	= inode->i_sb->s_dev;
 		__entry->ino	= inode->i_ino;
 		__entry->index	= index;
+		__entry->flags	= flags;
 		__entry->ret	= ret;
 	),
 
-	TP_printk("dev = (%d,%d), ino = %lu, index = %lu, ret = %lx",
+	TP_printk("dev = (%d,%d), ino = %lu, index = %lu, flags: %s, ret: %s",
 		show_dev_ino(__entry),
 		(unsigned long)__entry->index,
-		__entry->ret)
+		__print_flags(__entry->flags, "|", FAULT_FLAG_TRACE),
+		__print_flags(__entry->ret, "|", VM_FAULT_RESULT_TRACE))
+);
+
+DEFINE_EVENT(f2fs_mmap, f2fs_filemap_fault,
+
+	TP_PROTO(struct inode *inode, pgoff_t index,
+			vm_flags_t flags, vm_fault_t ret),
+
+	TP_ARGS(inode, index, flags, ret)
+);
+
+DEFINE_EVENT(f2fs_mmap, f2fs_vm_page_mkwrite,
+
+	TP_PROTO(struct inode *inode, pgoff_t index,
+			vm_flags_t flags, vm_fault_t ret),
+
+	TP_ARGS(inode, index, flags, ret)
 );
 
 TRACE_EVENT(f2fs_writepages,
@@ -2041,33 +2105,33 @@ TRACE_EVENT(f2fs_iostat_latency,
 
 	TP_fast_assign(
 		__entry->dev		= sbi->sb->s_dev;
-		__entry->d_rd_peak	= iostat_lat[0][DATA].peak_lat;
-		__entry->d_rd_avg	= iostat_lat[0][DATA].avg_lat;
-		__entry->d_rd_cnt	= iostat_lat[0][DATA].cnt;
-		__entry->n_rd_peak	= iostat_lat[0][NODE].peak_lat;
-		__entry->n_rd_avg	= iostat_lat[0][NODE].avg_lat;
-		__entry->n_rd_cnt	= iostat_lat[0][NODE].cnt;
-		__entry->m_rd_peak	= iostat_lat[0][META].peak_lat;
-		__entry->m_rd_avg	= iostat_lat[0][META].avg_lat;
-		__entry->m_rd_cnt	= iostat_lat[0][META].cnt;
-		__entry->d_wr_s_peak	= iostat_lat[1][DATA].peak_lat;
-		__entry->d_wr_s_avg	= iostat_lat[1][DATA].avg_lat;
-		__entry->d_wr_s_cnt	= iostat_lat[1][DATA].cnt;
-		__entry->n_wr_s_peak	= iostat_lat[1][NODE].peak_lat;
-		__entry->n_wr_s_avg	= iostat_lat[1][NODE].avg_lat;
-		__entry->n_wr_s_cnt	= iostat_lat[1][NODE].cnt;
-		__entry->m_wr_s_peak	= iostat_lat[1][META].peak_lat;
-		__entry->m_wr_s_avg	= iostat_lat[1][META].avg_lat;
-		__entry->m_wr_s_cnt	= iostat_lat[1][META].cnt;
-		__entry->d_wr_as_peak	= iostat_lat[2][DATA].peak_lat;
-		__entry->d_wr_as_avg	= iostat_lat[2][DATA].avg_lat;
-		__entry->d_wr_as_cnt	= iostat_lat[2][DATA].cnt;
-		__entry->n_wr_as_peak	= iostat_lat[2][NODE].peak_lat;
-		__entry->n_wr_as_avg	= iostat_lat[2][NODE].avg_lat;
-		__entry->n_wr_as_cnt	= iostat_lat[2][NODE].cnt;
-		__entry->m_wr_as_peak	= iostat_lat[2][META].peak_lat;
-		__entry->m_wr_as_avg	= iostat_lat[2][META].avg_lat;
-		__entry->m_wr_as_cnt	= iostat_lat[2][META].cnt;
+		__entry->d_rd_peak	= iostat_lat[READ_IO][DATA].peak_lat;
+		__entry->d_rd_avg	= iostat_lat[READ_IO][DATA].avg_lat;
+		__entry->d_rd_cnt	= iostat_lat[READ_IO][DATA].cnt;
+		__entry->n_rd_peak	= iostat_lat[READ_IO][NODE].peak_lat;
+		__entry->n_rd_avg	= iostat_lat[READ_IO][NODE].avg_lat;
+		__entry->n_rd_cnt	= iostat_lat[READ_IO][NODE].cnt;
+		__entry->m_rd_peak	= iostat_lat[READ_IO][META].peak_lat;
+		__entry->m_rd_avg	= iostat_lat[READ_IO][META].avg_lat;
+		__entry->m_rd_cnt	= iostat_lat[READ_IO][META].cnt;
+		__entry->d_wr_s_peak	= iostat_lat[WRITE_SYNC_IO][DATA].peak_lat;
+		__entry->d_wr_s_avg	= iostat_lat[WRITE_SYNC_IO][DATA].avg_lat;
+		__entry->d_wr_s_cnt	= iostat_lat[WRITE_SYNC_IO][DATA].cnt;
+		__entry->n_wr_s_peak	= iostat_lat[WRITE_SYNC_IO][NODE].peak_lat;
+		__entry->n_wr_s_avg	= iostat_lat[WRITE_SYNC_IO][NODE].avg_lat;
+		__entry->n_wr_s_cnt	= iostat_lat[WRITE_SYNC_IO][NODE].cnt;
+		__entry->m_wr_s_peak	= iostat_lat[WRITE_SYNC_IO][META].peak_lat;
+		__entry->m_wr_s_avg	= iostat_lat[WRITE_SYNC_IO][META].avg_lat;
+		__entry->m_wr_s_cnt	= iostat_lat[WRITE_SYNC_IO][META].cnt;
+		__entry->d_wr_as_peak	= iostat_lat[WRITE_ASYNC_IO][DATA].peak_lat;
+		__entry->d_wr_as_avg	= iostat_lat[WRITE_ASYNC_IO][DATA].avg_lat;
+		__entry->d_wr_as_cnt	= iostat_lat[WRITE_ASYNC_IO][DATA].cnt;
+		__entry->n_wr_as_peak	= iostat_lat[WRITE_ASYNC_IO][NODE].peak_lat;
+		__entry->n_wr_as_avg	= iostat_lat[WRITE_ASYNC_IO][NODE].avg_lat;
+		__entry->n_wr_as_cnt	= iostat_lat[WRITE_ASYNC_IO][NODE].cnt;
+		__entry->m_wr_as_peak	= iostat_lat[WRITE_ASYNC_IO][META].peak_lat;
+		__entry->m_wr_as_avg	= iostat_lat[WRITE_ASYNC_IO][META].avg_lat;
+		__entry->m_wr_as_cnt	= iostat_lat[WRITE_ASYNC_IO][META].cnt;
 	),
 
 	TP_printk("dev = (%d,%d), "
