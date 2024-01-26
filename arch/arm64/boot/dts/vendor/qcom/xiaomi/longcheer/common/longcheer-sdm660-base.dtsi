@@ -68,6 +68,7 @@
 
 &i2c_6 { /* SmartPA TI */
 	status = "ok";
+	qcom,disable-dma;
 	tas2557@4c {
 		status = "ok";
 		compatible = "ti,tas2557";
