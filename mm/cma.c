@@ -29,6 +29,7 @@
 #include <linux/err.h>
 #include <linux/mm.h>
 #include <linux/mutex.h>
+#include <linux/delay.h>
 #include <linux/sizes.h>
 #include <linux/slab.h>
 #include <linux/log2.h>
@@ -467,6 +468,7 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
 	int ret = -ENOMEM;
 	int num_attempts = 0;
 	int max_retries = 5;
+        int retry_after_sleep = 0;
 
 	if (!cma || !cma->count || !cma->bitmap)
 		goto out;
@@ -493,28 +495,27 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
 				bitmap_maxno, start, bitmap_count, mask,
 				offset);
 		if (bitmap_no >= bitmap_maxno) {
-			if ((num_attempts < max_retries) && (ret == -EBUSY)) {
-				mutex_unlock(&cma->lock);
+                        if ((num_attempts < max_retries) && (ret == -EBUSY)) {
+                                spin_unlock_irq(&cma->lock);
 
-				if (fatal_signal_pending(current))
-					break;
+                                if (fatal_signal_pending(current))
+                                        break;
 
-				/*
-				 * Page may be momentarily pinned by some other
-				 * process which has been scheduled out, e.g.
-				 * in exit path, during unmap call, or process
-				 * fork and so cannot be freed there. Sleep
-				 * for 100ms and retry the allocation.
-				 */
-				spin_unlock_irq(&cma->lock);
-				msleep(100);
-				retry_after_sleep++;
-				continue;
-			} else {
-				spin_unlock_irq(&cma->lock);
-				break;
-			}
-		}
+                                /*
+                                 * Page may be momentarily pinned by some other
+                                 * process which has been scheduled out, e.g.
+                                 * in exit path, during unmap call, or process
+                                 * fork and so cannot be freed there. Sleep
+                                 * for 100ms and retry the allocation.
+                                 */
+                                msleep(100);
+                                retry_after_sleep++;
+                                continue;
+                        } else {
+                                spin_unlock_irq(&cma->lock);
+                                break;
+                        }
+                        }
 		bitmap_set(cma->bitmap, bitmap_no, bitmap_count);
 		/*
 		 * It's safe to drop the lock here. We've marked this region for
@@ -607,6 +608,7 @@ bool cma_release(struct cma *cma, const struct page *pages, unsigned int count)
 
 	free_contig_range(pfn, count);
 	cma_clear_bitmap(cma, pfn, count);
+	cma_sysfs_account_release_pages(cma, count);
 	trace_cma_release(cma->name, pfn, pages, count);
 
 	return true;
