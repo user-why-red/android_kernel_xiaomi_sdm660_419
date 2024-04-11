@@ -602,7 +602,8 @@ bool __init wg_allowedips_selftest(void)
 		memcpy((u8 *)&ip + (i < 64) * 8, &part, 8);
 		wg_allowedips_insert_v6(&t, &ip, 128, a, &mutex);
 	}
-
+	memset(&ip, 0, 16);
+	wg_allowedips_insert_v6(&t, &ip, 128, a, &mutex);
 	wg_allowedips_free(&t, &mutex);
 
 	wg_allowedips_init(&t);
