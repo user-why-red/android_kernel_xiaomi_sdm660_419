@@ -3847,7 +3847,6 @@ int dev_err_probe(const struct device *dev, int err, const char *fmt, ...)
 	va_start(args, fmt);
 	vaf.fmt = fmt;
 	vaf.va = &args;
-
 	if (err != -EPROBE_DEFER) {
 		dev_err(dev, "error %d: %pV", err, &vaf);
 	} else {
