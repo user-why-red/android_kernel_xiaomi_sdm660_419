@@ -8504,10 +8504,15 @@ QDF_STATUS csr_roam_connect(struct mac_context *mac, uint32_t sessionId,
 	pSession->join_bssid_count = 0;
 	pSession->discon_in_progress = false;
 	pSession->is_fils_connection = csr_is_fils_connection(pProfile);
+	/* Initialize the orig_sec_info before proceeding with the Join requests */
+	qdf_mem_copy(&pSession->orig_sec_info, &pProfile->orig_sec_info,
+				sizeof(struct self_security_info));
 	sme_debug("Persona %d authtype %d  encryType %d mc_encType %d",
 		  pProfile->csrPersona, pProfile->AuthType.authType[0],
 		  pProfile->EncryptionType.encryptionType[0],
 		  pProfile->mcEncryptionType.encryptionType[0]);
+	sme_debug("pSession[orig_sec]: key_mgmt 0x%x", pSession->orig_sec_info.key_mgmt);
+
 	csr_roam_cancel_roaming(mac, sessionId);
 	csr_scan_abort_mac_scan(mac, sessionId, INVAL_SCAN_ID);
 	csr_roam_remove_duplicate_command(mac, sessionId, NULL, eCsrHddIssued);
@@ -20742,6 +20747,8 @@ static void csr_update_score_params(struct mac_context *mac_ctx,
 	req_score_params->bw_weightage = weight_config->chan_width_weightage;
 	req_score_params->band_weightage = weight_config->chan_band_weightage;
 	req_score_params->nss_weightage = weight_config->nss_weightage;
+	req_score_params->security_weightage =
+					weight_config->security_weightage;
 	req_score_params->esp_qbss_weightage =
 		weight_config->channel_congestion_weightage;
 	req_score_params->beamforming_weightage =
@@ -20756,6 +20763,8 @@ static void csr_update_score_params(struct mac_context *mac_ctx,
 		bss_score_params->band_weight_per_index;
 	req_score_params->nss_index_score =
 		bss_score_params->nss_weight_per_index;
+	req_score_params->security_index_score =
+		bss_score_params->security_weight_per_index;
 
 	req_score_params->vendor_roam_score_algorithm =
 			bss_score_params->vendor_roam_score_algorithm;
