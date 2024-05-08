@@ -722,7 +722,6 @@ retry_dn:
 		 */
 		if (dest == NEW_ADDR) {
 			f2fs_truncate_data_blocks_range(&dn, 1);
-
 			err = f2fs_reserve_new_block_retry(&dn);
 			if (err)
 				goto err;
