@@ -18069,42 +18069,6 @@ int wlan_hdd_cfg80211_check_pmf_valid(struct csr_roam_profile *roam_profile)
 }
 #endif
 
-
-/**
- * wlan_hdd_cfg80211_set_roam_profile() - set orig_sec_info to roam profile
- * @adapter: Pointer to adapter
- * @vdev: pointer to vdev object
- *
- * This function is used to set orig_sec_info to roam profile.
- *
- * Return: 0 for success, non-zero for failure
- */
-static int wlan_hdd_cfg80211_set_roam_profile(struct hdd_adapter *adapter,
-					struct wlan_objmgr_vdev *vdev)
-{
-	struct csr_roam_profile *roam_profile;
-	struct wlan_crypto_comp_priv *crypto_priv;
-	struct wlan_crypto_params *crypto_params;
-
-	roam_profile = hdd_roam_profile(adapter);
-	crypto_params = wlan_crypto_vdev_get_comp_params(vdev, &crypto_priv);
-	if (!crypto_priv) {
-		hdd_err("crypto_priv NULL");
-		return -EINVAL;
-	}
-
-	/*Save crypto paramters to orig_sec_info*/
-	roam_profile->orig_sec_info.rsn_caps = crypto_params->rsn_caps;
-	roam_profile->orig_sec_info.authmodeset = crypto_params->authmodeset;
-	roam_profile->orig_sec_info.ucastcipherset = crypto_params->ucastcipherset;
-	roam_profile->orig_sec_info.mcastcipherset = crypto_params->mcastcipherset;
-	roam_profile->orig_sec_info.key_mgmt = crypto_params->key_mgmt;
-	roam_profile->orig_sec_info.mgmtcipherset = crypto_params->mgmtcipherset;
-
-	sme_debug("roam_profile[orig_sec]: key_mgmt 0x%x", roam_profile->orig_sec_info.key_mgmt);
-
-	return 0;
-}
 /**
  * wlan_hdd_cfg80211_connect_start() - to start the association process
  * @adapter: Pointer to adapter
@@ -18268,7 +18232,6 @@ static int wlan_hdd_cfg80211_connect_start(struct hdd_adapter *adapter,
 		}
 		/* Save orignal DUT crypto parameter
 		   before call hdd_set_genie_to_csr */
-		wlan_hdd_cfg80211_set_roam_profile(adapter, vdev);
 
 		if (hdd_sta_ctx->wpa_versions) {
 			hdd_set_genie_to_csr(adapter, &rsn_auth_type);
