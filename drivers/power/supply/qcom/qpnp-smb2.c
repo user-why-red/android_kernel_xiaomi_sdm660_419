@@ -201,7 +201,7 @@ struct smb2 {
 
 static int __debug_mask;
 
-static int __weak_chg_icl_ua = 500000;
+static int __weak_chg_icl_ua = 900000;
 static ssize_t weak_chg_icl_ua_show(struct device *dev, struct device_attribute
 				     *attr, char *buf)
 {
