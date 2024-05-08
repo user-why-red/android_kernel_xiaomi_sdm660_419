@@ -1172,6 +1172,7 @@ struct hdd_context;
  * @acs_complete_event: acs complete event
  * @last_disconnect_reason: Last disconnected internal reason code
  *                          as per enum qca_disconnect_reason_codes
+ * @mon_adapter: hdd_adapter of monitor mode.
  */
 struct hdd_adapter {
 	/* Magic cookie for adapter sanity verification.  Note that this
@@ -1448,6 +1449,9 @@ struct hdd_adapter {
 	qdf_mutex_t sta_periodic_stats_lock;
 #endif /* WLAN_FEATURE_PERIODIC_STA_STATS */
 	qdf_event_t peer_cleanup_done;
+#ifdef WLAN_FEATURE_PKT_CAPTURE
+	struct hdd_adapter *mon_adapter;
+#endif
 };
 
 #define WLAN_HDD_GET_STATION_CTX_PTR(adapter) (&(adapter)->session.station)
@@ -4246,6 +4250,23 @@ int wlan_hdd_add_monitor_check(struct hdd_context *hdd_ctx,
  */
 void wlan_hdd_del_monitor(struct hdd_context *hdd_ctx,
 			  struct hdd_adapter *adapter, bool rtnl_held);
+/**
+  * hdd_reset_monitor_interface() - reset monitor interface flags
+  * @sta_adapter: station adapter
+  *
+  * Return: void
+  */
+void hdd_reset_monitor_interface(struct hdd_adapter *sta_adapter);
+
+/**
+  * hdd_is_pkt_capture_mon_enable() - Is packet capture monitor mode enable
+  * @sta_adapter: station adapter
+  *
+  * Return: status of packet capture monitor adapter
+  */
+struct hdd_adapter *
+hdd_is_pkt_capture_mon_enable(struct hdd_adapter *sta_adapter);
+
 #else
 static inline
 bool wlan_hdd_is_session_type_monitor(uint8_t session_type)
@@ -4271,6 +4292,14 @@ int wlan_hdd_add_monitor_check(struct hdd_context *hdd_ctx,
 static inline
 void wlan_hdd_del_monitor(struct hdd_context *hdd_ctx,
 			  struct hdd_adapter *adapter, bool rtnl_held)
+{
+}
+
+static inline void hdd_reset_monitor_interface(struct hdd_adapter *sta_adapter)
+{
+}
+
+static inline int hdd_is_pkt_capture_mon_enable(struct hdd_adapter *adapter)
 {
 }
 #endif /* WLAN_FEATURE_PKT_CAPTURE */
