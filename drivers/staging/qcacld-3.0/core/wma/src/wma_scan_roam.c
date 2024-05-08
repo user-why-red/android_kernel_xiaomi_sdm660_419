@@ -1061,8 +1061,6 @@ wma_roam_scan_fill_ap_profile(struct roam_offload_scan_req *roam_req,
 	int32_t connected_akm;
 	uint16_t rsn_caps;
 	bool peer_rmf_capable = false;
-	uint32_t num_allowed_authmode = 0;
-	enum wlan_crypto_key_mgmt i;
 
 	qdf_mem_zero(profile, sizeof(*profile));
 	if (!roam_req) {
