@@ -150,7 +150,7 @@ int __weak arch_asym_cpu_priority(int cpu)
  *
  * (default: ~5%)
  */
-#define capacity_greater(cap1, cap2) ((cap1) * 1024 > (cap2) * 1078)
+#define capacity_greater(cap1, cap2) ((cap1) > (cap2) * 1078 / 1024)
 #endif
 
 #ifdef CONFIG_CFS_BANDWIDTH
