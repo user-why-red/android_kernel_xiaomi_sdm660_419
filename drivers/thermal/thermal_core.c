@@ -812,10 +812,6 @@ int thermal_zone_bind_cooling_device(struct thermal_zone_device *tz,
 	device_remove_file(&tz->device, &dev->weight_attr);
 remove_lower_file:
 	device_remove_file(&tz->device, &dev->lower_attr);
-remove_upper_file:
-	device_remove_file(&tz->device, &dev->upper_attr);
-remove_trip_file:
-	device_remove_file(&tz->device, &dev->attr);
 remove_symbol_link:
 	sysfs_remove_link(&tz->device.kobj, dev->name);
 release_ida:
