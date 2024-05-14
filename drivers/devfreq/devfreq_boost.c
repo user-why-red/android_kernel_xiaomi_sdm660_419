@@ -10,7 +10,6 @@
 #include <linux/input.h>
 #include <linux/kthread.h>
 #include <linux/slab.h>
-#include <../drivers/misc/kprofiles/kprofiles.h>
 #include <uapi/linux/sched/types.h>
 #include "governor.h"
 
@@ -55,6 +54,8 @@ static struct df_boost_drv df_boost_drv_g __read_mostly = {
 	BOOST_DEV_INIT(df_boost_drv_g, DEVFREQ_MSM_CPU_DDR_BW,
 		       CONFIG_DEVFREQ_MSM_CPU_DDR_BW_BOOST_FREQ)
 };
+
+extern int kp_active_mode(void);
 
 static void __devfreq_boost_kick(struct boost_dev *b)
 {

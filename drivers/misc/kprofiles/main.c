@@ -76,6 +76,7 @@ void kp_set_mode_rollback(unsigned int level, unsigned int duration_ms)
 	kp_override = false;
 	mutex_unlock(&kplock);
 }
+EXPORT_SYMBOL(kp_set_mode_rollback);
 
 /*
  * This function can be used to change profile to
@@ -99,6 +100,7 @@ void kp_set_mode(unsigned int level)
 	if (auto_kprofiles)
 		kp_mode = level;
 }
+EXPORT_SYMBOL(kp_set_mode);
 
 /*
  * This function returns a number from 0 and 3 depending on the profile
@@ -141,6 +143,7 @@ int kp_active_mode(void)
 
 	return kp_mode;
 }
+EXPORT_SYMBOL(kp_active_mode);
 
 #ifdef CONFIG_AUTO_KPROFILES
 static inline int kp_notifier_callback(struct notifier_block *self,

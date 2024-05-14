@@ -16,7 +16,6 @@
 #include <linux/cpu.h>
 #include <linux/binfmts.h>
 #include <linux/devfreq_boost.h>
-#include <../drivers/misc/kprofiles/kprofiles.h>
 
 #include <trace/events/cgroup.h>
 
@@ -509,6 +508,8 @@ static int cgroup_pidlist_show(struct seq_file *s, void *v)
 
 	return 0;
 }
+
+extern int kp_active_mode(void);
 
 static ssize_t __cgroup1_procs_write(struct kernfs_open_file *of,
 				     char *buf, size_t nbytes, loff_t off,
