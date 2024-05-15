@@ -64,7 +64,6 @@ static void __devfreq_boost_kick(struct boost_dev *b)
 	if (!mod_delayed_work(system_unbound_wq, &b->input_unboost,
 		msecs_to_jiffies(CONFIG_DEVFREQ_INPUT_BOOST_DURATION_MS)))
 		wake_up(&b->boost_waitq);
-	}
 }
 
 void devfreq_boost_kick(enum df_device device)
