@@ -519,7 +519,7 @@ static ssize_t __cgroup1_procs_write(struct kernfs_open_file *of,
 	struct task_struct *task;
 	const struct cred *cred, *tcred;
 	ssize_t ret;
-        unsigned int period;
+        unsigned int period = 200;
 
 	cgrp = cgroup_kn_lock_live(of->kn, false);
 	if (!cgrp)
@@ -546,7 +546,17 @@ static ssize_t __cgroup1_procs_write(struct kernfs_open_file *of,
 	if (ret)
 		goto out_finish;
 
-	period = (kp_active_mode() == 2) ? 300 : (kp_active_mode() == 3) ? 500 : 200;
+        switch (kp_active_mode()) {
+        case 0: /* Use balance mode's boost period */
+        case 2:
+                /* Boost for 50 ms when balance mode is active */
+                period = 300;
+                break;
+        case 3:
+                /* Boost for 100 ms when performance mode is active */
+                period = 500;
+                break;
+        }
 
 	ret = cgroup_attach_task(cgrp, task, threadgroup);
 
