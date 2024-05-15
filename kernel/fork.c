@@ -2337,8 +2337,6 @@ struct task_struct *fork_idle(int cpu)
 	return task;
 }
 
-extern int kp_active_mode(void);
-
 /*
  *  Ok, this is the main fork-routine.
  *
@@ -2357,13 +2355,10 @@ long _do_fork(unsigned long clone_flags,
 	struct task_struct *p;
 	int trace = 0;
 	long nr;
-	unsigned int period;
 
-	period = (kp_active_mode() == 2) ? 50 : (kp_active_mode() == 3) ? 100 : 30;
-
-	/* Boost DDR bus to the max when userspace launches an app */
+	/* Boost DDR bus to the max for 100 ms when userspace launches an app */
 	if (task_is_zygote(current))
-		devfreq_boost_kick_max(DEVFREQ_MSM_CPU_DDR_BW, period);
+		devfreq_boost_kick_max(DEVFREQ_MSM_CPU_DDR_BW, 100);
 
 	/*
 	 * Determine whether and which event to report to ptracer.  When
