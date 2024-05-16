@@ -63,7 +63,7 @@ const struct wlan_crypto_cipher *wlan_crypto_cipher_ops[WLAN_CRYPTO_CIPHER_MAX];
  *
  * Return: wlan_crypto_params or NULL in case of failure
  */
-static struct wlan_crypto_params *wlan_crypto_vdev_get_comp_params(
+struct wlan_crypto_params *wlan_crypto_vdev_get_comp_params(
 				struct wlan_objmgr_vdev *vdev,
 				struct wlan_crypto_comp_priv **crypto_priv){
 	*crypto_priv = (struct wlan_crypto_comp_priv *)
