@@ -16,7 +16,6 @@
 #include <linux/cpu.h>
 #include <linux/binfmts.h>
 #include <linux/devfreq_boost.h>
-#include <../drivers/misc/kprofiles/kprofiles.h>
 
 #include <trace/events/cgroup.h>
 
@@ -518,7 +517,6 @@ static ssize_t __cgroup1_procs_write(struct kernfs_open_file *of,
 	struct task_struct *task;
 	const struct cred *cred, *tcred;
 	ssize_t ret;
-        unsigned int period;
 
 	cgrp = cgroup_kn_lock_live(of->kn, false);
 	if (!cgrp)
@@ -545,15 +543,13 @@ static ssize_t __cgroup1_procs_write(struct kernfs_open_file *of,
 	if (ret)
 		goto out_finish;
 
-	period = (kp_active_mode() == 2) ? 300 : (kp_active_mode() == 3) ? 500 : 200;
-
 	ret = cgroup_attach_task(cgrp, task, threadgroup);
 
 	/* This covers boosting for app launches and app transitions */
 	if (!ret && !threadgroup &&
 		!memcmp(of->kn->parent->name, "top-app", sizeof("top-app")) &&
 		task_is_zygote(task->parent))
-		devfreq_boost_kick_max(DEVFREQ_MSM_CPU_DDR_BW, period);
+		devfreq_boost_kick_max(DEVFREQ_MSM_CPU_DDR_BW, 500);
 
 out_finish:
 	cgroup_procs_write_finish(task);

@@ -97,7 +97,6 @@
 #include <linux/scs.h>
 #include <linux/simple_lmk.h>
 #include <linux/devfreq_boost.h>
-#include <../drivers/misc/kprofiles/kprofiles.h>
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
@@ -190,19 +189,28 @@ static int free_vm_stack_cache(unsigned int cpu)
 {
 	struct vm_struct **cached_vm_stacks = per_cpu_ptr(cached_stacks, cpu);
 	int i;
+	int freed = 0;
+
+	struct vm_struct *stacks_to_free[NR_CACHED_STACKS];
+	int num_to_free = 0;
 
 	for (i = 0; i < NR_CACHED_STACKS; i++) {
-		struct vm_struct *vm_stack = cached_vm_stacks[i];
+	struct vm_struct *vm_stack = cached_vm_stacks[i];
 
-		if (!vm_stack)
-			continue;
-
-		vfree(vm_stack->addr);
+	if (vm_stack) {
+		stacks_to_free[num_to_free++] = vm_stack;
 		cached_vm_stacks[i] = NULL;
+		freed++;
+		}
 	}
 
-	return 0;
+	for (i = 0; i < num_to_free; i++) {
+		vfree(stacks_to_free[i]->addr);
+		}
+
+	return freed;
 }
+
 #endif
 
 static unsigned long *alloc_thread_stack_node(struct task_struct *tsk, int node)
@@ -2347,13 +2355,10 @@ long _do_fork(unsigned long clone_flags,
 	struct task_struct *p;
 	int trace = 0;
 	long nr;
-	unsigned int period;
 
-	period = (kp_active_mode() == 2) ? 50 : (kp_active_mode() == 3) ? 100 : 30;
-
-	/* Boost DDR bus to the max when userspace launches an app */
+	/* Boost DDR bus to the max for 100 ms when userspace launches an app */
 	if (task_is_zygote(current))
-		devfreq_boost_kick_max(DEVFREQ_MSM_CPU_DDR_BW, period);
+		devfreq_boost_kick_max(DEVFREQ_MSM_CPU_DDR_BW, 100);
 
 	/*
 	 * Determine whether and which event to report to ptracer.  When

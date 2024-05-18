@@ -2140,6 +2140,15 @@ extern long sched_getaffinity(pid_t pid, struct cpumask *mask);
 #define TASK_SIZE_OF(tsk)	TASK_SIZE
 #endif
 
+#if defined(CONFIG_CPU_FREQ_GOV_SCHEDUTIL) && defined(CONFIG_CPU_IDLE_GOV_TEO)
+unsigned long sched_cpu_util(int cpu);
+#else
+static inline unsigned long sched_cpu_util(int cpu)
+{
+	return 0;
+}
+#endif
+
 #ifdef CONFIG_RSEQ
 
 /*

@@ -28,10 +28,13 @@ void cpu_idle_poll_ctrl(bool enable)
 {
 	if (enable) {
 		cpu_idle_force_poll++;
+
 	} else {
-		cpu_idle_force_poll--;
-		WARN_ON_ONCE(cpu_idle_force_poll < 0);
+    		if (cpu_idle_force_poll > 0) {
+        		cpu_idle_force_poll--;
+    		}
 	}
+
 }
 
 #ifdef CONFIG_GENERIC_IDLE_POLL_SETUP

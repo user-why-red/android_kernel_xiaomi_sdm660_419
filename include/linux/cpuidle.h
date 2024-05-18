@@ -29,10 +29,15 @@ struct cpuidle_driver;
  * CPUIDLE DEVICE INTERFACE *
  ****************************/
 
+#define CPUIDLE_STATE_DISABLED_BY_USER		BIT(0)
+#define CPUIDLE_STATE_DISABLED_BY_DRIVER	BIT(1)
+
 struct cpuidle_state_usage {
 	unsigned long long	disable;
 	unsigned long long	usage;
 	unsigned long long	time; /* in US */
+	unsigned long long	above; /* Number of times it's been too deep */
+	unsigned long long	below; /* Number of times it's been too shallow */
 #ifdef CONFIG_SUSPEND
 	unsigned long long	s2idle_usage;
 	unsigned long long	s2idle_time; /* in US */

@@ -10,7 +10,6 @@
 #include <linux/input.h>
 #include <linux/kthread.h>
 #include <linux/slab.h>
-#include <../drivers/misc/kprofiles/kprofiles.h>
 #include <uapi/linux/sched/types.h>
 #include "governor.h"
 
@@ -58,22 +57,13 @@ static struct df_boost_drv df_boost_drv_g __read_mostly = {
 
 static void __devfreq_boost_kick(struct boost_dev *b)
 {
-	unsigned int period;
-
-	if (!READ_ONCE(b->df) || test_bit(SCREEN_OFF, &b->state) || kp_active_mode() == 1)
+	if (!READ_ONCE(b->df) || test_bit(SCREEN_OFF, &b->state))
 		return;
-
-	period = (kp_active_mode() == 2) ? (CONFIG_DEVFREQ_INPUT_BOOST_DURATION_MS * 1.5) :
-		 (kp_active_mode() == 3) ? (CONFIG_DEVFREQ_INPUT_BOOST_DURATION_MS * 2) :
-		 CONFIG_DEVFREQ_INPUT_BOOST_DURATION_MS;
 
 	set_bit(INPUT_BOOST, &b->state);
 	if (!mod_delayed_work(system_unbound_wq, &b->input_unboost,
-		msecs_to_jiffies(period))) {
-		/* Set the bit again in case we raced with the unboost worker */
-		set_bit(INPUT_BOOST, &b->state);
+		msecs_to_jiffies(CONFIG_DEVFREQ_INPUT_BOOST_DURATION_MS)))
 		wake_up(&b->boost_waitq);
-	}
 }
 
 void devfreq_boost_kick(enum df_device device)
@@ -88,7 +78,7 @@ static void __devfreq_boost_kick_max(struct boost_dev *b,
 {
 	unsigned long boost_jiffies, curr_expires, new_expires;
 
-	if (!READ_ONCE(b->df) || test_bit(SCREEN_OFF, &b->state) || kp_active_mode() == 1)
+	if (!READ_ONCE(b->df) || test_bit(SCREEN_OFF, &b->state))
 		return;
 
 	boost_jiffies = msecs_to_jiffies(duration_ms);
