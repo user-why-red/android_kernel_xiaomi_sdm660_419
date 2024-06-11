@@ -222,14 +222,8 @@ void update_cgroup_boost_settings(void) {
 	}
 }
 
-void restore_cgroup_boost_settings(void)
-{
-	int i;
-
-	for (i = 0; i < BOOSTGROUPS_COUNT; i++) {
-		if (!allocated_group[i])
-			break;
-
+void restore_cgroup_boost_settings(void) {
+	for (int i = 0; i < BOOSTGROUPS_COUNT && allocated_group[i]; ++i) {
 		allocated_group[i]->sched_boost_enabled = true;
 	}
 }
