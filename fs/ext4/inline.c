@@ -14,7 +14,7 @@
 #include "truncate.h"
 
 #define EXT4_XATTR_SYSTEM_DATA	"data"
-#define EXT4_MIN_INLINE_DATA_SIZE	((sizeof(__le32) * EXT4_N_BLOCKS))
+#define EXT4_MIN_INLINE_DATA_SIZE	(sizeof(__le32) * EXT4_N_BLOCKS)
 #define EXT4_INLINE_DOTDOT_OFFSET	2
 #define EXT4_INLINE_DOTDOT_SIZE		4
 
