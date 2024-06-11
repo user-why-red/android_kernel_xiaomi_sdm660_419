@@ -74,8 +74,7 @@ static int get_max_inline_xattr_value_size(struct inode *inode,
 		}
 		entry = next;
 	}
-	free = min_offs -
-		((void *)entry - (void *)IFIRST(header)) - sizeof(__u32);
+	free = min_offs - ((uintptr_t)entry - (uintptr_t)IFIRST(header)) - sizeof(__u32);
 
 	if (EXT4_I(inode)->i_inline_off) {
 		entry = (struct ext4_xattr_entry *)
