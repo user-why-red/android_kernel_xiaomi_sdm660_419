@@ -1064,14 +1064,14 @@ static void ax88179_rx_fixup
 	pkt_cnt = rx_hdr & 0xFF;
 	pkt_hdr_curr = hdr_off = rx_hdr >> 16;
 
-	aa = (actual_length - (((pkt_cnt + 2) & 0xFE) * 4));
-	if ((aa != hdr_off) ||
-	    (hdr_off >= desc->urb->actual_length) ||
-	    (pkt_cnt == 0)) {
-		desc->urb->actual_length = 0;
-		stats->rx_length_errors++;
-		return;
-	}
+	        aa = (actual_length - (((pkt_cnt + 2) & 0xFE) * 4));
+        if ((aa != hdr_off) ||
+            (hdr_off >= desc->urb->actual_length) ||
+            (pkt_cnt == 0)) {
+                desc->urb->actual_length = 0;
+                stats->rx_length_errors++;
+                return;
+        }
 
 	rx_data = desc->head;
 	while (pkt_cnt--) {

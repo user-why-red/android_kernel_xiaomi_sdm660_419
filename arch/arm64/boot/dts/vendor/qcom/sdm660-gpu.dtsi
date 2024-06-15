@@ -103,6 +103,9 @@
 		vddcx-supply = <&gdsc_gpu_cx>;
 		vdd-supply = <&gdsc_gpu_gx>;
 
+		/* Avoid L2PC on big cluster CPUs (CPU 4,5,6,7) */
+		qcom,l2pc-cpu-mask = <0x000000f0>;
+
 		/* Quirks */
 		qcom,gpu-quirk-dp2clockgating-disable;
 		qcom,gpu-quirk-lmloadkill-disable;
@@ -692,3 +695,5 @@
 		};
 	};
 };
+
+#include "sdm660-gpu-oc.dtsi"

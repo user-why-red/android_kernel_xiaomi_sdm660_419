@@ -213,29 +213,17 @@ static inline void init_sched_boost(struct schedtune *st)
 	st->colocate_update_disabled = false;
 }
 
-void update_cgroup_boost_settings(void)
-{
-	int i;
+void update_cgroup_boost_settings(void) {
+	for (int i = 0; i < BOOSTGROUPS_COUNT && allocated_group[i]; ++i) {
+		if (!allocated_group[i]->sched_boost_no_override) {
+			allocated_group[i]->sched_boost_enabled = false;
 
-	for (i = 0; i < BOOSTGROUPS_COUNT; i++) {
-		if (!allocated_group[i])
-			break;
-
-		if (allocated_group[i]->sched_boost_no_override)
-			continue;
-
-		allocated_group[i]->sched_boost_enabled = false;
+		}
 	}
 }
 
-void restore_cgroup_boost_settings(void)
-{
-	int i;
-
-	for (i = 0; i < BOOSTGROUPS_COUNT; i++) {
-		if (!allocated_group[i])
-			break;
-
+void restore_cgroup_boost_settings(void) {
+	for (int i = 0; i < BOOSTGROUPS_COUNT && allocated_group[i]; ++i) {
 		allocated_group[i]->sched_boost_enabled = true;
 	}
 }
