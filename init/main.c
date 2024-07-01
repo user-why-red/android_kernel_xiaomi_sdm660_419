@@ -164,6 +164,45 @@ static int __init set_cpuoverclock(char *val)
 }
 __setup("androidboot.cpuoverclock=", set_cpuoverclock);
 
+u64 zram_size = 0;
+static int __init set_zram_resize(char *val)
+{
+    unsigned int option;
+    get_option(&val, &option);
+
+    switch (option) {
+        case 1:
+            zram_size = 1ULL * 1024 * 1024 * 1024; // 1 GB
+            pr_info("Kernel: ZRAM size set to 1GB\n");
+            break;
+        case 2:
+            zram_size = 2ULL * 1024 * 1024 * 1024; // 2 GB
+            pr_info("Kernel: ZRAM size set to 2GB\n");
+            break;
+        case 3:
+            zram_size = 3ULL * 1024 * 1024 * 1024; // 3 GB
+            pr_info("Kernel: ZRAM size set to 3GB\n");
+            break;
+        case 4:
+            zram_size = 4ULL * 1024 * 1024 * 1024; // 4 GB
+            pr_info("Kernel: ZRAM size set to 4GB\n");
+            break;
+        case 5:
+            zram_size = 5ULL * 1024 * 1024 * 1024; // 5 GB
+            pr_info("Kernel: ZRAM size set to 5GB\n");
+            break;
+        case 6:
+            zram_size = 6ULL * 1024 * 1024 * 1024; // 6 GB
+            pr_info("Kernel: ZRAM size set to 6GB\n");
+            break;
+        default:
+            pr_err("Unexpected error in set_zram_resize\n");
+            return -EINVAL;
+    }
+
+    return 0;
+}
+__setup("zram.resize=", set_zram_resize);
 /*
  * Used to generate warnings if static_key manipulation functions are used
  * before jump_label_init is called.
