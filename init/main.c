@@ -149,7 +149,7 @@ static char *execute_command;
 static char *ramdisk_execute_command;
 
 bool enable_cpuoc = false;
-static int __init set_cpuoverclock(char *val)
+static int __init set_cpu_overclock(char *val)
 {
 	unsigned int temp;
 
@@ -157,12 +157,12 @@ static int __init set_cpuoverclock(char *val)
 
 	if (temp) {
 		enable_cpuoc = true;
-		pr_info("Kernel: CPU OC mode = 1");
+		pr_info("Kernel: CPU overclock is enabled\n");
 	}
 
 	return 0;
 }
-__setup("androidboot.cpuoverclock=", set_cpuoverclock);
+__setup("overclock.cpu=", set_cpu_overclock);
 
 u64 zram_size = 0;
 static int __init set_zram_resize(char *val)
