@@ -888,10 +888,9 @@ unsigned int irq_find_mapping(struct irq_domain *domain,
 	struct irq_data *data;
 
 	/* Look for default domain if nececssary */
-	if (domain == NULL)
-		domain = irq_default_domain;
-	if (domain == NULL)
+	if (domain == NULL && (domain = irq_default_domain) == NULL) {
 		return 0;
+	}
 
 	if (hwirq < domain->revmap_direct_max_irq) {
 		data = irq_domain_get_irq_data(domain, hwirq);
