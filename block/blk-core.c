@@ -2138,13 +2138,22 @@ out_unlock:
 
 static void handle_bad_sector(struct bio *bio, sector_t maxsector)
 {
+	static int log_count = 0;
 	char b[BDEVNAME_SIZE];
 
-	pr_info_ratelimited("attempt to access beyond end of device\n"
-			    "%s: rw=%d, want=%Lu, limit=%Lu\n",
-			    bio_devname(bio, b), bio->bi_opf,
-			    (unsigned long long)bio_end_sector(bio),
-			    (long long)maxsector);
+	/* Ensure that after 10 log messages,
+	 * any further attempts to access beyond the end of the device
+	 * will not generate additional log entries.
+	 * This can help in reducing log clutter.
+	*/
+	if (log_count < 10) {
+		pr_info_ratelimited("attempt to access beyond end of device\n"
+				"%s: rw=%d, want=%Lu, limit=%Lu\n",
+				bio_devname(bio, b), bio->bi_opf,
+				(unsigned long long)bio_end_sector(bio),
+				(long long)maxsector);
+				log_count++;
+	}
 }
 
 #ifdef CONFIG_FAIL_MAKE_REQUEST
