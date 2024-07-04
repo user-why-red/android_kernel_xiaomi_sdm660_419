@@ -1454,8 +1454,9 @@ static int tasha_micbias_control(struct snd_soc_component *component,
 					0xC0, 0x80);
 		break;
 	case MICB_PULLUP_DISABLE:
-		if (tasha->pullup_ref[micb_index] > 0)
-			tasha->pullup_ref[micb_index]--;
+		tasha->pullup_ref[micb_index]--;
+		if (tasha->pullup_ref[micb_index] < 0)
+			tasha->pullup_ref[micb_index] = 0;
 		if ((tasha->pullup_ref[micb_index] == 0) &&
 		    (tasha->micb_ref[micb_index] == 0))
 			snd_soc_component_update_bits(component, micb_reg,
