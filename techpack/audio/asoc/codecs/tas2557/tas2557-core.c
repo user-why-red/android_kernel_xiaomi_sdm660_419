@@ -202,14 +202,20 @@ int tas2557_get_bit_rate(struct tas2557_priv *pTAS2557, unsigned char *pBitRate)
 	ret = pTAS2557->read(pTAS2557, TAS2557_ASI1_DAC_FORMAT_REG, &nValue);
 	if (ret >= 0) {
 		bitRate = (nValue&0x18)>>3;
-		if (bitRate == 0)
-			bitRate = 16;
-		else if (bitRate == 1)
-			bitRate = 20;
-		else if (bitRate == 2)
-			bitRate = 24;
-		else if (bitRate == 3)
-			bitRate = 32;
+		switch (bitRate) {
+			case 0:
+				bitRate = 16;
+				break;
+			case 1:
+				bitRate = 20;
+				break;
+			case 2:
+				bitRate = 24;
+				break;
+			case 3:
+				bitRate = 32;
+				break;
+		}
 		*pBitRate = bitRate;
 	}
 
