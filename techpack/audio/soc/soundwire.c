@@ -229,22 +229,19 @@ int swr_remove_from_group(struct swr_device *dev, u8 dev_num)
 {
 	struct swr_master *master;
 
-	if (!dev)
-		return -ENODEV;
-
-	master = dev->master;
-	if (!master)
+	if (!dev || !dev->master)
 		return -EINVAL;
 
-	if (!dev->group_id)
-		return 0;
+	master = dev->master;
 
 	if (master->gr_sid != dev_num)
 		return 0;
 
-	if (master->remove_from_group && master->remove_from_group(master))
+	if (master->remove_from_group && master->remove_from_group(master)) {
 		dev_dbg(&master->dev, "%s: falling back to GROUP_NONE\n",
 			__func__);
+		return 0;
+	}
 
 	return 0;
 }
