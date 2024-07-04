@@ -2147,7 +2147,7 @@ static void handle_bad_sector(struct bio *bio, sector_t maxsector)
 	 * This can help in reducing log clutter.
 	*/
 	if (log_count < 10) {
-		pr_info_ratelimited("attempt to access beyond end of device\n"
+		pr_info("attempt to access beyond end of device\n"
 				"%s: rw=%d, want=%Lu, limit=%Lu\n",
 				bio_devname(bio, b), bio->bi_opf,
 				(unsigned long long)bio_end_sector(bio),
