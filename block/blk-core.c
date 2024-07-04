@@ -2153,6 +2153,12 @@ static void handle_bad_sector(struct bio *bio, sector_t maxsector)
 				(unsigned long long)bio_end_sector(bio),
 				(long long)maxsector);
 				log_count++;
+		}
+	/* Inform that further logs will not be recorded */
+	if (log_count == 10) {
+		pr_info("handle_bad_sector: Limit exceeded!\n"
+			"Further callbacks won't take place in log entries.");
+		log_count++;
 	}
 }
 
