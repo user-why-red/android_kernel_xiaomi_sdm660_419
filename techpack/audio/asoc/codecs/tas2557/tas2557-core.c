@@ -79,6 +79,7 @@ static unsigned int p_tas2557_default_data[] = {
 	TAS2557_SAR_ADC2_REG, 0x05,	/* enable SAR ADC */
 	TAS2557_CLK_ERR_CTRL2, 0x21,	/*clk1:clock hysteresis, 0.34ms; clock halt, 22ms*/
 	TAS2557_CLK_ERR_CTRL3, 0x21,	/*clk2: rampDown 15dB/us, clock hysteresis, 10.66us; clock halt, 22ms */
+	TAS2557_DBOOST_CFG_REG, 0x0b,   /* HTC_AUD: Solve full band noise */
 	TAS2557_SAFE_GUARD_REG, TAS2557_SAFE_GUARD_PATTERN,	/* safe guard */
 	0xFFFFFFFF, 0xFFFFFFFF
 };
