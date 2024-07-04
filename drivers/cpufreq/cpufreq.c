@@ -682,8 +682,6 @@ static ssize_t show_cpuinfo_max_freq(struct cpufreq_policy *policy, char *buf)
 
 	if (should_use_cached_freq(policy->cpu))
 		freq = cpuinfo_max_freq_cached << 1;
-	else
-		freq = policy->cpuinfo.max_freq;
 
 	return scnprintf(buf, PAGE_SIZE, "%u\n", freq);
 }
