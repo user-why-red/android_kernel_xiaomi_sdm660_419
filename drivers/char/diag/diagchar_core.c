@@ -3871,7 +3871,7 @@ static ssize_t diagchar_read(struct file *file, char __user *buf, size_t count,
 
 		DIAG_LOG(DIAG_DEBUG_MASKS,
 		"diag: %s: event masks update complete for client pid: %d\n",
-		__func__, current->tgid);
+		current->tgid);
 
 		goto exit;
 	}
