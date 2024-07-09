@@ -564,11 +564,13 @@ static int save_image(struct swap_map_handle *handle,
 	}
 	err2 = hib_wait_io(&hb);
 	stop = ktime_get();
-	if (!ret)
+	if (!ret) {
 		ret = err2;
-	if (!ret)
-		pr_info("Image saving done\n");
-	swsusp_show_speed(start, stop, nr_to_write, "Wrote");
+		if (!ret) {
+			pr_info("Image saving done\n");
+			swsusp_show_speed(start, stop, nr_to_write, "Wrote");
+		}
+	}
 	return ret;
 }
 
