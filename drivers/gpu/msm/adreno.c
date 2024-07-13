@@ -28,16 +28,7 @@
 /* Include the master list of GPU cores that are supported */
 #include "adreno-gpulist.h"
 
-unsigned int is_gpu_overclocked = 0;
-
-static int __init read_gpu_overclock_state(char *s)
-{
-	if (s)
-		is_gpu_overclocked = simple_strtoul(s, NULL, 0);
-
-	return 1;
-}
-__setup("overclock.gpu=", read_gpu_overclock_state);
+extern int enable_gpuoc;
 
 static void adreno_pwr_on_work(struct work_struct *work);
 static unsigned int counter_delta(struct kgsl_device *device,
@@ -996,7 +987,7 @@ static int adreno_of_get_pwrlevels(struct adreno_device *adreno_dev,
 	struct device_node *node, *child;
 	unsigned int bin = 0;
 
-	if (is_gpu_overclocked > 0) {
+	if (enable_gpuoc) {
 		node = of_find_node_by_name(parent, "qcom,gpu-pwrlevel-binsoc");
 
 	if (node == NULL)

@@ -173,6 +173,21 @@ static int __init set_cpu_overclock(char *val)
 }
 __setup("overclock.cpu=", set_cpu_overclock);
 
+int enable_gpuoc = 0;
+static int __init set_gpu_overclock(char *val)
+{
+        unsigned int option;
+
+        get_option(&val, &option);
+	if (option){
+		enable_gpuoc = 1;
+		pr_info("kernel: GPU is overclocked to 585Mhz\n");
+	}
+
+        return 0;
+}
+__setup("overclock.gpu=", set_gpu_overclock);
+
 u64 zram_size = 0;
 static int __init set_zram_resize(char *val)
 {
