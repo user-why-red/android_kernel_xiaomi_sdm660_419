@@ -431,7 +431,7 @@ int cpuidle_enable_device(struct cpuidle_device *dev)
 	int ret;
 	struct cpuidle_driver *drv;
 
-	if (!dev)
+	if (!dev || !dev->registered)
 		return -EINVAL;
 
 	if (dev->enabled)
@@ -444,9 +444,6 @@ int cpuidle_enable_device(struct cpuidle_device *dev)
 
 	if (!drv)
 		return -EIO;
-
-	if (!dev->registered)
-		return -EINVAL;
 
 	ret = cpuidle_add_device_sysfs(dev);
 	if (ret)
