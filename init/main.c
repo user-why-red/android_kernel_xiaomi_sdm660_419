@@ -188,6 +188,31 @@ static int __init set_gpu_overclock(char *val)
 }
 __setup("overclock.gpu=", set_gpu_overclock);
 
+int enable_cpuuc = 0;
+static int __init set_cpu_underclock(char *val)
+{
+        unsigned int option;
+
+        get_option(&val, &option);
+
+        switch (option) {
+                case 1:
+                        enable_cpuuc = 1;
+                        pr_info("kernel: CPU is underclocked to 1.4Ghz\n");
+                        break;
+                case 2:
+                        enable_cpuuc = 2;
+                        pr_info("kernel: CPU is underclocked to 1.8Ghz\n");
+                        break;
+                default:
+                        pr_err("Unexpected error in set_cpu_underclock\n");
+                        return -EINVAL;
+                }
+
+        return 0;
+}
+__setup("underclock.cpu=", set_cpu_underclock);
+
 u64 zram_size = 0;
 static int __init set_zram_resize(char *val)
 {
