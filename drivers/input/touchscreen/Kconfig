@@ -1384,9 +1384,9 @@ config TOUCHSCREEN_NVT_D2S
 	  To compile this driver as a module, choose M here: the
 	  module will be called nvt.
 
+
 config TOUCHSCREEN_NVT_F7A
 	tristate "novatek touchscreens"
-	select TOUCHSCREEN_NT36XXX
 	help
 	  Say Y here if you have a nvt touchscreen.
 	  nvt controllers are multi touch controllers which can
@@ -1396,6 +1396,8 @@ config TOUCHSCREEN_NVT_F7A
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called nvt.
+
+source "drivers/input/touchscreen/nvt_touch_f7a/Kconfig"
 
 source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
 
