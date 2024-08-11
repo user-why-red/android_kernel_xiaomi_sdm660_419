@@ -1106,14 +1106,18 @@ err_get_alloc_mutex_failed:
 static unsigned long
 binder_shrink_count(struct shrinker *shrink, struct shrink_control *sc)
 {
-	return list_lru_count(&binder_alloc_lru);
+	unsigned long ret = list_lru_count(&binder_alloc_lru);
+	return ret;
 }
 
 static unsigned long
 binder_shrink_scan(struct shrinker *shrink, struct shrink_control *sc)
 {
-	return list_lru_walk(&binder_alloc_lru, binder_alloc_free_page,
+	unsigned long ret;
+
+	ret = list_lru_walk(&binder_alloc_lru, binder_alloc_free_page,
 			    NULL, sc->nr_to_scan);
+	return ret;
 }
 
 static struct shrinker binder_shrinker = {
