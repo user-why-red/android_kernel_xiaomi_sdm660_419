@@ -1699,20 +1699,29 @@ static inline void adreno_ringbuffer_set_pagetable(struct adreno_ringbuffer *rb,
 static inline bool is_power_counter_overflow(struct adreno_device *adreno_dev,
 	unsigned int reg, unsigned int prev_val, unsigned int *perfctr_pwr_hi)
 {
-	unsigned int val;
+	unsigned int val_hi, val_lo, current_hi;
 	bool ret = false;
 
 	/*
-	 * If prev_val is zero, it is first read after perf counter reset.
-	 * So set perfctr_pwr_hi register to zero.
+	 * If prev_val is zero, it may be the first read after a reset or an actual zero value.
+	 * We only reset perfctr_pwr_hi if this is the first read after a reset.
 	 */
-	if (prev_val == 0) {
+	if (prev_val == 0 && *perfctr_pwr_hi == 0) {
 		*perfctr_pwr_hi = 0;
 		return ret;
 	}
-	adreno_readreg(adreno_dev, ADRENO_REG_RBBM_PERFCTR_RBBM_0_HI, &val);
-	if (val != *perfctr_pwr_hi) {
-		*perfctr_pwr_hi = val;
+
+	adreno_readreg(adreno_dev, ADRENO_REG_RBBM_PERFCTR_RBBM_0_HI, &val_hi);
+	adreno_readreg(adreno_dev, reg, &val_lo);
+	adreno_readreg(adreno_dev, ADRENO_REG_RBBM_PERFCTR_RBBM_0_HI, &current_hi);
+
+	if (val_hi != current_hi) {
+		val_hi = current_hi;
+		ret = true;
+	}
+
+	if (val_hi != *perfctr_pwr_hi) {
+		*perfctr_pwr_hi = val_hi;
 		ret = true;
 	}
 	return ret;
@@ -1727,27 +1736,24 @@ static inline unsigned int counter_delta(struct kgsl_device *device,
 	bool overflow = true;
 	static unsigned int perfctr_pwr_hi;
 
-	/* Read the value */
 	kgsl_regread(device, reg, &val);
 
-	if (adreno_is_a5xx(adreno_dev) && reg == adreno_getreg
-		(adreno_dev, ADRENO_REG_RBBM_PERFCTR_RBBM_0_LO))
-		overflow = is_power_counter_overflow(adreno_dev, reg,
-				*counter, &perfctr_pwr_hi);
+	if (adreno_is_a5xx(adreno_dev) && reg == adreno_getreg(adreno_dev, ADRENO_REG_RBBM_PERFCTR_RBBM_0_LO))
+		overflow = is_power_counter_overflow(adreno_dev, reg, *counter, &perfctr_pwr_hi);
 
-	/* Return 0 for the first read */
 	if (*counter != 0) {
 		if (val >= *counter) {
 			ret = val - *counter;
 		} else if (overflow) {
-			ret = (0xFFFFFFFF - *counter) + val;
+			/* +1 to account for the roll-over */
+			ret = (0xFFFFFFFF - *counter) + val + 1;
 		} else {
 			/*
 			 * Since KGSL got abnormal value from the counter,
 			 * We will drop the value from being accumulated.
 			 */
 			dev_warn_once(device->dev,
-				"Abnormal value :0x%x (0x%x) from perf counter : 0x%x\n",
+				"Abnormal value: 0x%x (0x%x) from perf counter: 0x%x\n",
 				val, *counter, reg);
 			return 0;
 		}
