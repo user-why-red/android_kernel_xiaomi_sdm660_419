@@ -260,9 +260,11 @@
  *       msg defs.
  * 3.131 Add H2T TYPE_MSDUQ_RECFG_REQ + T2H MSDUQ_CFG_IND msg defs.
  * 3.132 Add flow_classification_3_tuple_field_enable in H2T 3_TUPLE_HASH_CFG.
+ * 3.133 Add packet_type_enable_data_flags fields in rx_ring_selection_cfg.
+ * 3.134 Add qdata_refill flag in rx_peer_metadata_v1a.
  */
 #define HTT_CURRENT_VERSION_MAJOR 3
-#define HTT_CURRENT_VERSION_MINOR 132
+#define HTT_CURRENT_VERSION_MINOR 134
 
 #define HTT_NUM_TX_FRAG_DESC  1024
 
@@ -825,6 +827,8 @@ typedef enum {
     HTT_STATS_PDEV_RTT_HW_STATS_TAG                 = 196, /* htt_stats_pdev_rtt_hw_stats_tlv */
     HTT_STATS_PDEV_RTT_TBR_SELFGEN_QUEUED_STATS_TAG = 197, /* htt_stats_pdev_rtt_tbr_selfgen_queued_stats_tlv */
     HTT_STATS_PDEV_RTT_TBR_CMD_RESULT_STATS_TAG     = 198, /* htt_stats_pdev_rtt_tbr_cmd_result_stats_tlv */
+    HTT_STATS_GTX_TAG                               = 199, /* htt_stats_gtx_tlv */
+    HTT_STATS_TX_PDEV_WIFI_RADAR_TAG                = 200, /* htt_stats_tx_pdev_wifi_radar_tlv */
 
 
     HTT_STATS_MAX_TAG,
@@ -5788,38 +5792,39 @@ enum htt_srng_ring_id {
  *
  *    The message would appear as follows:
  *
- *    |31 28|27|26|25|24|23|22|21 19|18 16|15  | 11| 10|9 8|7             0|
- *    |-----+--+--+--+--+-----------------+----+---+---+---+---------------|
- *    |rsvd1|DT|OV|PS|SS|      ring_id    |     pdev_id    |    msg_type   |
- *    |-----------------------+-----+-----+--------------------------------|
- *    |rsvd2|RX|RXHDL|   CLD  | CLC | CLM |           ring_buffer_size     |
- *    |--------------------------------------------------------------------|
- *    |                         packet_type_enable_flags_0                 |
- *    |--------------------------------------------------------------------|
- *    |                         packet_type_enable_flags_1                 |
- *    |--------------------------------------------------------------------|
- *    |                         packet_type_enable_flags_2                 |
- *    |--------------------------------------------------------------------|
- *    |                         packet_type_enable_flags_3                 |
- *    |--------------------------------------------------------------------|
- *    |                          tlv_filter_in_flags                       |
- *    |-----------------------------------+--------------------------------|
- *    |          rx_header_offset         |       rx_packet_offset         |
- *    |-----------------------------------+--------------------------------|
- *    |        rx_mpdu_start_offset       |      rx_mpdu_end_offset        |
- *    |-----------------------------------+--------------------------------|
- *    |        rx_msdu_start_offset       |      rx_msdu_end_offset        |
- *    |-----------------------------------+--------------------------------|
- *    |               rsvd3               |      rx_attention_offset       |
- *    |--------------------------------------------------------------------|
- *    |               rsvd4                    | mo| fp| rx_drop_threshold |
- *    |                                        |ndp|ndp|                   |
- *    |--------------------------------------------------------------------|
+ *    |31 29|28|27|26|25|24|23|22|21 19|18 16|15  | 11| 10|9 8|7             0|
+ *    |-----+--+--+--+--+--+-----------------+----+---+---+---+---------------|
+ *    |rsvd1|ED|DT|OV|PS|SS|      ring_id    |     pdev_id    |    msg_type   |
+ *    |--------------------------+-----+-----+--------------------------------|
+ *    | rsvd2  |RX|RXHDL|   CLD  | CLC | CLM |           ring_buffer_size     |
+ *    |-----------------------------------------------------------------------|
+ *    |                           packet_type_enable_flags_0                  |
+ *    |-----------------------------------------------------------------------|
+ *    |                           packet_type_enable_flags_1                  |
+ *    |-----------------------------------------------------------------------|
+ *    |                           packet_type_enable_flags_2                  |
+ *    |-----------------------------------------------------------------------|
+ *    |                           packet_type_enable_flags_3                  |
+ *    |-----------------------------------------------------------------------|
+ *    |                            tlv_filter_in_flags                        |
+ *    |--------------------------------------+--------------------------------|
+ *    |           rx_header_offset           |       rx_packet_offset         |
+ *    |--------------------------------------+--------------------------------|
+ *    |         rx_mpdu_start_offset         |      rx_mpdu_end_offset        |
+ *    |--------------------------------------+--------------------------------|
+ *    |         rx_msdu_start_offset         |      rx_msdu_end_offset        |
+ *    |--------------------------------------+--------------------------------|
+ *    |                rsvd3                 |      rx_attention_offset       |
+ *    |-----------------------------------------------------------------------|
+ *    |                rsvd4                      | mo| fp| rx_drop_threshold |
+ *    |                                           |ndp|ndp|                   |
+ *    |-----------------------------------------------------------------------|
  * Where:
  *     PS = pkt_swap
  *     SS = status_swap
  *     OV = rx_offsets_valid
  *     DT = drop_thresh_valid
+ *     ED = packet type enable data flags fields present / valid
  *     CLM = config_length_mgmt
  *     CLC = config_length_ctrl
  *     CLD = config_length_data
@@ -5844,8 +5849,12 @@ enum htt_srng_ring_id {
  *          b'27    - drop_thresh_valid (DT): flag to indicate if the
  *                    rx_drop_threshold field is valid
  *          b'28    - rx_mon_global_en: Enable/Disable global register
- 8                    configuration in Rx monitor module.
- *          b'29:31 - rsvd1:  reserved for future use
+ *                    configuration in Rx monitor module.
+ *          b'29    - packet_type_enable_data: flag to indicate whether
+ *                    newer packet_type_enable_data_flags_* are valid or not
+ *                    If not set, will use pkt_type_enable_flags for both status
+ *                    and full pkt buffer configuration.
+ *          b'30:31 - rsvd1:  reserved for future use
  * dword1 - b'0:15  - ring_buffer_size: size of bufferes referenced by rx ring,
  *                    in byte units.
  *                    Valid only for HW_TO_SW_RING and SW_TO_HW_RING
@@ -6009,6 +6018,32 @@ enum htt_srng_ring_id {
  *                    1:  RX_PKT TLV logging at specified offset for the
  *                        subsequent buffer
  *          b`15:1  - rx_pkt_tlv_offset: Qword offset for rx_packet TLVs.
+ * dword18- b'0:19  - rx_mpdu_start_wmask_v2 - wmask address for rx mpdu start
+ *          b'20-27 - rx_mpdu_end_wmask_v2 - wmask addr for rx mpdu end tlv addr
+ *          b'28-31 - reserved
+ * dword19- b'0-19  - rx_msdu_end_wmask_v2
+ *          b'20-31 - reserved
+ * dword20- b'0:19  - rx_ppdu_end_user_stats_wmask_v2
+ *                    offset for ppdu_end_user_stats tlv
+ *          b'20-31 - reserved
+ * dword21- b'0-31  - packet_type_enable_fpmo_flags_0 - filter bmap for each
+ *                    mode mgmt/ctrl type/subtype for fpmo mode
+ * dword22- b'0-31  - packet_type_enable_fpmo_flags_1 - filter bmap for each
+ *                    mode ctrl/data type/subtype for fpmo mode
+ * dword23- b'0-31  - packet_type_enable_data_flags_0 - filter bmap for full
+ *                    pkt buffer each mode MGMT type/subtype
+ * dword24- b'0-31  - packet_type_enable_data_flags_0 - filter bmap for full
+ *                    pkt buffer each mode MGMT type/subtype
+ * dword25- b'0-31  - packet_type_enable_data_flags_0 - filter bmap for full
+ *                    pkt buffer each mode CTRL type/subtype
+ * dword26- b'0-31  - packet_type_enable_data_flags_0 - filter bmap for full
+ *                    pkt buffer each mode CTRL/DATA type/subtype
+ * dword27- b'0-31  - packet_type_enable_data_fpmo_flags_0 - filter bmap for
+ *                    full pkt buffer each mode mgmt/ctrl type/subtype for
+ *                    fpmo mode
+ * dword28- b'0-31  - packet_type_enable_data_fpmo_flags_1 - filter bmap for
+ *                    full pkt buffer each mode ctrl/data type/subtype for
+ *                    fpmo mode
  */
 PREPACK struct htt_rx_ring_selection_cfg_t {
     A_UINT32 msg_type:          8,
@@ -6019,7 +6054,8 @@ PREPACK struct htt_rx_ring_selection_cfg_t {
              rx_offsets_valid:  1,
              drop_thresh_valid: 1,
              rx_mon_global_en:  1,
-             rsvd1:             3;
+             packet_type_enable_data: 1,
+             rsvd1:             2;
     A_UINT32 ring_buffer_size: 16,
              config_length_mgmt:3,
              config_length_ctrl:3,
@@ -6073,6 +6109,12 @@ PREPACK struct htt_rx_ring_selection_cfg_t {
              rsvd10:                             12;
     A_UINT32 packet_type_enable_fpmo_flags0;
     A_UINT32 packet_type_enable_fpmo_flags1;
+    A_UINT32 packet_type_enable_data_flags_0;
+    A_UINT32 packet_type_enable_data_flags_1;
+    A_UINT32 packet_type_enable_data_flags_2;
+    A_UINT32 packet_type_enable_data_flags_3;
+    A_UINT32 packet_type_enable_data_fpmo_flags0;
+    A_UINT32 packet_type_enable_data_fpmo_flags1;
 } POSTPACK;
 
 #define HTT_RX_RING_SELECTION_CFG_SZ    (sizeof(struct htt_rx_ring_selection_cfg_t))
@@ -6152,6 +6194,17 @@ PREPACK struct htt_rx_ring_selection_cfg_t {
             do { \
                 HTT_CHECK_SET_VAL(HTT_RX_RING_SELECTION_CFG_RX_MON_GLOBAL_EN, _val); \
                 ((_var) |= ((_val) << HTT_RX_RING_SELECTION_CFG_RX_MON_GLOBAL_EN_S)); \
+            } while (0)
+
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_M    0x20000000
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_S           29
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_GET(_var) \
+            (((_var) & HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_M) >> \
+                    HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_S)
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_SET(_var, _val) \
+            do { \
+                HTT_CHECK_SET_VAL(HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA, _val); \
+                ((_var) |= ((_val) << HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_S)); \
             } while (0)
 
 #define HTT_RX_RING_SELECTION_CFG_RING_BUFFER_SIZE_M           0x0000ffff
@@ -6641,6 +6694,74 @@ PREPACK struct htt_rx_ring_selection_cfg_t {
          HTT_CHECK_SET_VAL(HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_FPMO_FLAGS1, _val); \
          ((_var) |= ((_val) << HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_FPMO_FLAGS1_S)); \
      } while (0)
+
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_0_M     0xffffffff
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_0_S     0
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_0_GET(_var) \
+            (((_var) & HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_0_M) >> \
+                    HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_0_S)
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_0_SET(_var, _val) \
+            do { \
+                HTT_CHECK_SET_VAL(HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_0, _val); \
+                ((_var) |= ((_val) << HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_0_S)); \
+            } while (0)
+
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_1_M     0xffffffff
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_1_S     0
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_1_GET(_var) \
+            (((_var) & HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_1_M) >> \
+                    HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_1_S)
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_1_SET(_var, _val) \
+            do { \
+                HTT_CHECK_SET_VAL(HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_1, _val); \
+                ((_var) |= ((_val) << HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_1_S)); \
+            } while (0)
+
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_2_M     0xffffffff
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_2_S     0
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_2_GET(_var) \
+            (((_var) & HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_2_M) >> \
+                    HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_2_S)
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_2_SET(_var, _val) \
+            do { \
+                HTT_CHECK_SET_VAL(HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_2, _val); \
+                ((_var) |= ((_val) << HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_2_S)); \
+            } while (0)
+
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_3_M     0xffffffff
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_3_S     0
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_3_GET(_var) \
+            (((_var) & HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_3_M) >> \
+                    HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_3_S)
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_3_SET(_var, _val) \
+            do { \
+                HTT_CHECK_SET_VAL(HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_3, _val); \
+                ((_var) |= ((_val) << HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FLAG_3_S)); \
+            } while (0)
+
+
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS0_M      0xFFFFFFFF
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS0_S      0
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS0_GET(_var) \
+    (((_var) & HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS0_M)>> \
+        HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS0_S)
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS0_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS0, _val); \
+         ((_var) |= ((_val) << HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS0_S)); \
+     } while (0)
+
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS1_M      0xFFFFFFFF
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS1_S      0
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS1_GET(_var) \
+    (((_var) & HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS1_M)>> \
+        HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS1_S)
+#define HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS1_SET(_var, _val) \
+     do { \
+         HTT_CHECK_SET_VAL(HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS1, _val); \
+         ((_var) |= ((_val) << HTT_RX_RING_SELECTION_CFG_PACKET_TYPE_ENABLE_DATA_FPMO_FLAGS1_S)); \
+     } while (0)
+
 
 /*
  * Subtype based MGMT frames enable bits.
@@ -7171,33 +7292,35 @@ PREPACK struct htt_rx_ring_selection_cfg_t {
  *
  *    The message would appear as follows:
  *
- *    |31    26|25|24|23 22|21|20|19|18 16|15|14|13|12|11|10|9|8|7|6|5|4|3|2  0|
- *    |--------+--+--+-----+--+--+--+-----+--+--+--+--+--+--+-+-+-+-+-+-+-+----|
- *    | rsvd1  |PS|SS|       ring_id      |        pdev_id      |   msg_type   |
- *    |-----------+--------+--------+-----+------------------------------------|
- *    |   rsvd2   |  DATA  |  CTRL  | MGMT|            ring_buffer_size        |
- *    |--------------------------------------+--+--+--+--+--+-+-+-+-+-+-+-+----|
- *    |                                      | M| M| M| M| M|M|M|M|M|M|M|M|    |
- *    |                                      | S| S| S| P| P|P|S|S|S|P|P|P|    |
- *    |                                      | E| E| E| E| E|E|S|S|S|S|S|S|    |
- *    |                  rsvd3               | D| C| M| D| C|M|D|C|M|D|C|M|  E |
- *    |------------------------------------------------------------------------|
- *    |                            tlv_filter_mask_in0                         |
- *    |------------------------------------------------------------------------|
- *    |                            tlv_filter_mask_in1                         |
- *    |------------------------------------------------------------------------|
- *    |                            tlv_filter_mask_in2                         |
- *    |------------------------------------------------------------------------|
- *    |                            tlv_filter_mask_in3                         |
- *    |-----------------+-----------------+---------------------+--------------|
- *    | tx_msdu_start_wm| tx_queue_ext_wm |  tx_peer_entry_wm   |tx_fes_stup_wm|
- *    |------------------------------------------------------------------------|
- *    |                       pcu_ppdu_setup_word_mask                         |
- *    |--------------------+--+--+--+-----+---------------------+--------------|
- *    |       rsvd4        | D| C| M|  PT |   rxpcu_usrsetp_wm  |tx_mpdu_srt_wm|
- *    |------------------------------------------------------------------------|
+ * |31 28|27|26|25|24|23 22|21|20|19|18 16|15|14|13|12|11|10|9|8|7|6|5|4|3|2  0|
+ * |-----+--+--+--+--+-----+--+--+--+-----+--+--+--+--+--+--+-+-+-+-+-+-+-+----|
+ * |rsvd1|MF|TM|PS|SS|       ring_id      |        pdev_id      |   msg_type   |
+ * |--------------+--------+--------+-----+------------------------------------|
+ * |    rsvd2     |  DATA  |  CTRL  | MGMT|            ring_buffer_size        |
+ * |-----------------------------------------+--+--+--+--+--+-+-+-+-+-+-+-+----|
+ * |                                         | M| M| M| M| M|M|M|M|M|M|M|M|    |
+ * |                                         | S| S| S| P| P|P|S|S|S|P|P|P|    |
+ * |                                         | E| E| E| E| E|E|S|S|S|S|S|S|    |
+ * |                     rsvd3               | D| C| M| D| C|M|D|C|M|D|C|M|  E |
+ * |---------------------------------------------------------------------------|
+ * |                               tlv_filter_mask_in0                         |
+ * |---------------------------------------------------------------------------|
+ * |                               tlv_filter_mask_in1                         |
+ * |---------------------------------------------------------------------------|
+ * |                               tlv_filter_mask_in2                         |
+ * |---------------------------------------------------------------------------|
+ * |                               tlv_filter_mask_in3                         |
+ * |--------------------+-----------------+---------------------+--------------|
+ * |  tx_msdu_start_wm  | tx_queue_ext_wm |  tx_peer_entry_wm   |tx_fes_stup_wm|
+ * |---------------------------------------------------------------------------|
+ * |                          pcu_ppdu_setup_word_mask                         |
+ * |-----------------------+--+--+--+-----+---------------------+--------------|
+ * |         rsvd4         | D| C| M|  PT |   rxpcu_usrsetp_wm  |tx_mpdu_srt_wm|
+ * |---------------------------------------------------------------------------|
  *
  * Where:
+ *     MF = MAC address filtering enable
+ *     TM = tx monitor global enable
  *     PS = pkt_swap
  *     SS = status_swap
  * The message is interpreted as follows:
@@ -7216,7 +7339,9 @@ PREPACK struct htt_rx_ring_selection_cfg_t {
  *                    e.g. wmac_top_reg_seq_hwioreg.h
  *          b'26    - tx_mon_global_en: Enable/Disable global register
  *                    configuration in Tx monitor module.
- *          b'27:31 - rsvd1:  reserved for future use
+ *          b'27    - mac_addr_filter_en:
+ *                    Enable/Disable Mac Address based filter.
+ *          b'28:31 - rsvd1:  reserved for future use
  * dword1 - b'0:15  - ring_buffer_size: size of bufferes referenced by rx ring,
  *                    in byte units.
  *                    Valid only for HW_TO_SW_RING and SW_TO_HW_RING
@@ -7362,7 +7487,8 @@ PREPACK struct htt_tx_monitor_cfg_t {
              status_swap:                            1,
              pkt_swap:                               1,
              tx_mon_global_en:                       1,
-             rsvd1:                                  5;
+             mac_addr_filter_en:                     1,
+             rsvd1:                                  4;
     A_UINT32 ring_buffer_size:                      16,
              config_length_mgmt:                     3,
              config_length_ctrl:                     3,
@@ -7463,6 +7589,17 @@ PREPACK struct htt_tx_monitor_cfg_t {
             do { \
                 HTT_CHECK_SET_VAL(HTT_TX_MONITOR_CFG_TX_MON_GLOBAL_EN, _val); \
                 ((_var) |= ((_val) << HTT_TX_MONITOR_CFG_TX_MON_GLOBAL_EN_S)); \
+            } while (0)
+
+#define HTT_TX_MONITOR_CFG_MAC_ADDR_FILTER_EN_M         0x08000000
+#define HTT_TX_MONITOR_CFG_MAC_ADDR_FILTER_EN_S         27
+#define HTT_TX_MONITOR_CFG_MAC_ADDR_FILTER_EN_GET(_var) \
+            (((_var) & HTT_TX_MONITOR_CFG_MAC_ADDR_FILTER_EN_M) >> \
+                    HTT_TX_MONITOR_CFG_MAC_ADDR_FILTER_EN_S)
+#define HTT_TX_MONITOR_CFG_MAC_ADDR_FILTER_EN_SET(_var, _val) \
+            do { \
+                HTT_CHECK_SET_VAL(HTT_TX_MONITOR_CFG_MAC_ADDR_FILTER_EN, _val); \
+                ((_var) |= ((_val) << HTT_TX_MONITOR_CFG_MAC_ADDR_FILTER_EN_S)); \
             } while (0)
 
 #define HTT_TX_MONITOR_CFG_RING_BUFFER_SIZE_M           0x0000ffff
@@ -20591,7 +20728,8 @@ PREPACK struct htt_rx_peer_metadata_v1a {
         vdev_id:         8,
         logical_link_id: 4,
         chip_id:         3,
-        reserved2:       3;
+        qdata_refill:    1,
+        reserved2:       2;
 } POSTPACK;
 
 #define HTT_RX_PEER_META_DATA_V1A_PEER_ID_S    0
@@ -20647,6 +20785,17 @@ PREPACK struct htt_rx_peer_metadata_v1a {
     do {                                             \
         HTT_CHECK_SET_VAL(HTT_RX_PEER_META_DATA_V1A_CHIP_ID, _val);  \
         ((_var) |= ((_val) << HTT_RX_PEER_META_DATA_V1A_CHIP_ID_S)); \
+    } while (0)
+
+#define HTT_RX_PEER_META_DATA_V1A_QDATA_REFILL_S    29
+#define HTT_RX_PEER_META_DATA_V1A_QDATA_REFILL_M    0x20000000
+#define HTT_RX_PEER_META_DATA_V1A_QDATA_REFILL_GET(_var) \
+    (((_var) & HTT_RX_PEER_META_DATA_V1A_QDATA_REFILL_M) >> HTT_RX_PEER_META_DATA_V1A_QDATA_REFILL_S)
+
+#define HTT_RX_PEER_META_DATA_V1A_QDATA_REFILL_SET(_var, _val) \
+    do {                                             \
+        HTT_CHECK_SET_VAL(HTT_RX_PEER_META_DATA_V1A_QDATA_REFILL, _val);  \
+        ((_var) |= ((_val) << HTT_RX_PEER_META_DATA_V1A_QDATA_REFILL_S)); \
     } while (0)
 
 
@@ -21374,7 +21523,7 @@ PREPACK struct htt_t2h_sawf_msduq_event {
 #define HTT_T2H_SAWF_MSDUQ_INFO_HTT_TGT_OPAQUE_ID_M              0x00FFFFFF
 #define HTT_T2H_SAWF_MSDUQ_INFO_HTT_TGT_OPAQUE_ID_S                       0
 #define HTT_T2H_SAWF_MSDUQ_INFO_HTT_TGT_OPAQUE_ID_GET(_var) \
-    (((_var) & HTT_T2H_SAWF_MSDUQ_INFO_HTT_TGT_OPAQUE_ID) >> \
+    (((_var) & HTT_T2H_SAWF_MSDUQ_INFO_HTT_TGT_OPAQUE_ID_M) >> \
      HTT_T2H_SAWF_MSDUQ_INFO_HTT_TGT_OPAQUE_ID_S)
 #define HTT_T2H_SAWF_MSDUQ_INFO_HTT_TGT_OPAQUE_ID_SET(_var, _val) \
     do { \
@@ -22923,10 +23072,15 @@ typedef struct _htt_tx_latency_stats {
 
 /* HTT_T2H_MSG_TYPE_SDWF_MSDUQ_CFG_IND */
 typedef enum {
-    HTT_SDWF_MSDUQ_CFG_IND_ERROR_NONE = 0x00,
+    HTT_SDWF_MSDUQ_CFG_IND_ERROR_NONE                = 0x00,
     HTT_SDWF_MSDUQ_CFG_IND_ERROR_PEER_DELETE_IN_PROG = 0x01,
-    HTT_SDWF_MSDUQ_CFG_IND_ERROR_SW_MSDUQ_NULL = 0x02,
-    HTT_SDWF_MSDUQ_CFG_IND_ERROR_MSDUQ_LOCATE_ERROR = 0x03,
+    HTT_SDWF_MSDUQ_CFG_IND_ERROR_SW_MSDUQ_NULL       = 0x02,
+    HTT_SDWF_MSDUQ_CFG_IND_ERROR_MSDUQ_LOCATE_ERROR  = 0x03,
+    HTT_SDWF_MSDUQ_CFG_IND_ERROR_QPEER_NULL          = 0x04,
+    HTT_SDWF_MSDUQ_CFG_IND_ERROR_DEACTIVATED_MSDUQ   = 0x05,
+    HTT_SDWF_MSDUQ_CFG_IND_ERROR_REACTIVATED_MSDUQ   = 0x06,
+    HTT_SDWF_MSDUQ_CFG_IND_ERROR_INVALID_SVC_CLASS   = 0x07,
+    HTT_SDWF_MSDUQ_CFG_IND_ERROR_TIDQ_LOCATE_ERROR   = 0x08,
 } HTT_SDWF_MSDUQ_CFG_IND_ERROR_CODE_E;
 
 PREPACK struct htt_t2h_sdwf_msduq_cfg_ind {
@@ -22983,7 +23137,7 @@ PREPACK struct htt_t2h_sdwf_msduq_cfg_ind {
 #define HTT_T2H_MSG_TYPE_SDWF_MSDUQ_CFG_IND_HLOS_TID_GET(_var) \
         (((_var) & HTT_T2H_MSG_TYPE_SDWF_MSDUQ_CFG_IND_HLOS_TID_M) >> \
                 HTT_T2H_MSG_TYPE_SDWF_MSDUQ_CFG_IND_HLOS_TID_S)
-#define HTT_T2H_MSG_TYPE_MSDUQ_CFG_IN_DHLOS_TID_SET(_var, _val) \
+#define HTT_T2H_MSG_TYPE_SDWF_MSDUQ_CFG_IND_HLOS_TID_SET(_var, _val) \
     do { \
         HTT_CHECK_SET_VAL(HTT_T2H_MSG_TYPE_SDWF_MSDUQ_CFG_IND_HLOS_TID, _val); \
         ((_var) |= ((_val) << HTT_T2H_MSG_TYPE_SDWF_MSDUQ_CFG_IND_HLOS_TID_S)); \
