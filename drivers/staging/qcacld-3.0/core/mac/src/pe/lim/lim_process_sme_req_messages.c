@@ -1156,6 +1156,22 @@ static QDF_STATUS lim_send_ft_reassoc_req(struct pe_session *session,
 					     reassoc_req);
 }
 
+static void
+lim_strip_rsnx_ie(struct mac_context *mac_ctx, struct join_req *in_req,
+                  struct pe_session *session)
+{
+	tSirAddie *addIE = &session->lim_join_req->addIEAssoc;
+	enum ani_akm_type akm = in_req->akm;
+
+	if (wlan_get_ie_ptr_from_eid(WLAN_ELEMID_RSNXE, addIE->addIEdata,
+	    addIE->length) && ANI_AKM_IS_WPA_WPA2(akm)) {
+		lim_strip_ie(mac_ctx, addIE->addIEdata,
+			     (uint16_t *)&addIE->length,
+			     WLAN_ELEMID_RSNXE, ONE_BYTE,
+			     NULL, 0, NULL, WLAN_MAX_IE_LEN);
+	}
+}
+
 /**
  * __lim_process_sme_join_req() - process SME_JOIN_REQ message
  * @mac_ctx: Pointer to Global MAC structure
@@ -1447,10 +1463,12 @@ __lim_process_sme_join_req(struct mac_context *mac_ctx, void *msg_buf)
 				     &sme_join_req->addIEScan,
 				     sizeof(tSirAddie));
 
-		if (sme_join_req->addIEAssoc.length)
+		if (sme_join_req->addIEAssoc.length) {
 			qdf_mem_copy(&session->lim_join_req->addIEAssoc,
 				     &sme_join_req->addIEAssoc,
 				     sizeof(tSirAddie));
+			lim_strip_rsnx_ie(mac_ctx, sme_join_req, session);
+		}
 
 		val = sizeof(tLimMlmJoinReq) +
 			session->lim_join_req->bssDescription.length + 2;
