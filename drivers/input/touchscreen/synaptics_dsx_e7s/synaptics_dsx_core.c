@@ -4793,9 +4793,11 @@ static int synaptics_rmi4_resume(struct device *dev)
 		rmi4_data->enable_wakeup_gesture = !rmi4_data->enable_wakeup_gesture;
 	}
 	if (rmi4_data->enable_wakeup_gesture) {
-		disable_irq_wake(rmi4_data->irq);
-		synaptics_rmi4_wakeup_gesture(rmi4_data, false);
-		goto exit;
+		if (irqd_is_wakeup_set(irq_get_irq_data(rmi4_data->irq))) {
+			disable_irq_wake(rmi4_data->irq);
+		}
+	synaptics_rmi4_wakeup_gesture(rmi4_data, false);
+	goto exit;
 	}
 
 	rmi4_data->current_page = MASK_8BIT;
