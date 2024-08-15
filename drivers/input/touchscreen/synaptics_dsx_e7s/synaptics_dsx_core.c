@@ -4728,7 +4728,6 @@ static int synaptics_rmi4_suspend(struct device *dev)
 	if (rmi4_data->stay_awake)
 		return 0;
 	if (rmi4_data->enable_wakeup_gesture) {
-		SYN_LOG("enable_wakeup_gesture is on\n");
 		if (rmi4_data->no_sleep_setting) {
 			synaptics_rmi4_reg_read(rmi4_data,
 					rmi4_data->f01_ctrl_base_addr,
@@ -4776,7 +4775,6 @@ exit:
 	mutex_unlock(&exp_data.mutex);
 
 	rmi4_data->suspend = true;
-	SYN_LOG("SUSPEND END\n");
 	return 0;
 }
 
@@ -4827,7 +4825,6 @@ exit:
 
 	rmi4_data->suspend = false;
 	gesture_delay = false;
-	SYN_LOG("RESUME END\n");
 	return 0;
 }
 
