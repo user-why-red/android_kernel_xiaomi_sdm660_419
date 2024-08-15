@@ -99,7 +99,7 @@ QDF_STATUS qdf_ini_parse(const char *ini_path, void *context,
 
 		key = qdf_str_trim(key);
 
-		pr_info("qcacld: cfg: \"%s\" = \"%s\"\n", key, value);
+		pr_debug("qcacld: cfg: \"%s\" = \"%s\"\n", key, value);
 
 		/*
 		 * Ignoring comments, a valid ini line contains one of:
