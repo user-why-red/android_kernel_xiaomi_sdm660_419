@@ -1768,7 +1768,7 @@ static int synaptics_rmi4_sensor_report(struct synaptics_rmi4_data *rmi4_data,
 		}
 	}
 	if (rmi4_data->status.unconfigured && !rmi4_data->status.flash_prog) {
-		pr_notice("%s: spontaneous reset detected\n", __func__);
+		pr_debug("%s: spontaneous reset detected\n", __func__);
 		retval = synaptics_rmi4_reinit_device(rmi4_data);
 		if (retval < 0) {
 			dev_err(rmi4_data->pdev->dev.parent,
@@ -4728,7 +4728,6 @@ static int synaptics_rmi4_suspend(struct device *dev)
 	if (rmi4_data->stay_awake)
 		return 0;
 	if (rmi4_data->enable_wakeup_gesture) {
-		SYN_LOG("enable_wakeup_gesture is on\n");
 		if (rmi4_data->no_sleep_setting) {
 			synaptics_rmi4_reg_read(rmi4_data,
 					rmi4_data->f01_ctrl_base_addr,
@@ -4776,7 +4775,6 @@ exit:
 	mutex_unlock(&exp_data.mutex);
 
 	rmi4_data->suspend = true;
-	SYN_LOG("SUSPEND END\n");
 	return 0;
 }
 
@@ -4793,9 +4791,11 @@ static int synaptics_rmi4_resume(struct device *dev)
 		rmi4_data->enable_wakeup_gesture = !rmi4_data->enable_wakeup_gesture;
 	}
 	if (rmi4_data->enable_wakeup_gesture) {
-		disable_irq_wake(rmi4_data->irq);
-		synaptics_rmi4_wakeup_gesture(rmi4_data, false);
-		goto exit;
+		if (irqd_is_wakeup_set(irq_get_irq_data(rmi4_data->irq))) {
+			disable_irq_wake(rmi4_data->irq);
+		}
+	synaptics_rmi4_wakeup_gesture(rmi4_data, false);
+	goto exit;
 	}
 
 	rmi4_data->current_page = MASK_8BIT;
@@ -4825,7 +4825,6 @@ exit:
 
 	rmi4_data->suspend = false;
 	gesture_delay = false;
-	SYN_LOG("RESUME END\n");
 	return 0;
 }
 
