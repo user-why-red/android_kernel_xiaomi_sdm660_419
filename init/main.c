@@ -181,7 +181,7 @@ static int __init set_gpu_overclock(char *val)
         get_option(&val, &option);
 	if (option){
 		enable_gpuoc = 1;
-		pr_info("kernel: GPU is overclocked to 585Mhz(Adreno 509) or 750Mhz(Adreno 512)\n");
+		pr_info("kernel: GPU is overclocked to 630Mhz(Adreno 509) or 750Mhz(Adreno 512)\n");
 	}
 
         return 0;
