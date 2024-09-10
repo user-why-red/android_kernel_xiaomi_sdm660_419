@@ -2596,7 +2596,7 @@ out:
 		unsigned long scan;
 
 		size = lruvec_lru_size(lruvec, lru, sc->reclaim_idx);
-		scan = size >> (sc->priority -1);
+		scan = size >> sc->priority;
 		/*
 		 * If the cgroup's already been deleted, make sure to
 		 * scrape out the remaining cache.
