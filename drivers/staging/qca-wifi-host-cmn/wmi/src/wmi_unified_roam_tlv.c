@@ -1819,7 +1819,7 @@ send_roam_scan_offload_ap_profile_cmd_tlv(wmi_unified_t wmi_handle,
 			ap_profile->profile.num_allowed_authmode * sizeof(uint32_t));
 	} else {
 		/* set zero TLV's for allowed_authmode */
-		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
+		WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_UINT32,
 			WMITLV_GET_STRUCT_TLVLEN(0));
 		wmi_debug("[Allowed Authmode]: num_allowed_authmode: %u",
 			ap_profile->profile.num_allowed_authmode);
