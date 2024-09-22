@@ -231,8 +231,4 @@ source "drivers/gpu/msm/Kconfig"
 
 source "drivers/energy_model/Kconfig"
 
-#ifdef CONFIG_KSU
-source "drivers/kernelsu/Kconfig"
-#endif
-
 endmenu
