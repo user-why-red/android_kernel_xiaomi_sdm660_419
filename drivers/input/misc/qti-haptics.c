@@ -860,9 +860,14 @@ static int qti_haptics_upload_effect(struct input_dev *dev,
 	if (hrtimer_active(&chip->hap_disable_timer)) {
 		rem = hrtimer_get_remaining(&chip->hap_disable_timer);
 		time_us = ktime_to_us(rem);
-		dev_dbg(chip->dev, "waiting for playing clear sequence: %lld us\n",
-				time_us);
-		usleep_range(time_us, time_us + 100);
+		if (time_us > 0) {
+			dev_dbg(chip->dev, "waiting for playing clear sequence: %lld us\n",
+					time_us);
+			usleep_range(time_us, time_us + 100);
+		} else {
+			dev_dbg(chip->dev, "negative clear sequence time detected: %lld us - not waiting\n",
+					time_us);
+		}
 	}
 
 	switch (effect->type) {
