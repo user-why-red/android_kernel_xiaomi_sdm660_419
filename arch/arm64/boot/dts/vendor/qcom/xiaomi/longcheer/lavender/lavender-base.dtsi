@@ -71,6 +71,15 @@
 };
 
 /* sdm660.dtsi lavender specific diff */
+&firmware {
+	android {
+		vbmeta {
+			compatible = "android,vbmeta";
+			parts = "vbmeta,boot,system,vendor,dtbo,recovery";
+		};
+	};
+};
+
 &pil_modem {
 	/delete-property/ qcom,complete-ramdump;
 };
