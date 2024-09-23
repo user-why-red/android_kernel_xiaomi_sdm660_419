@@ -17,12 +17,12 @@ static int cmdline_proc_show(struct seq_file *m, void *v)
 static int __init proc_cmdline_init(void)
 {
 	char *offset_addr, *cmd = new_command_line;
-	char *search = "skip_initramf";
-	char *replace = "androidboot.force_normal_boot=1";
 	size_t search_len, replace_len;
 
 	strcpy(cmd, saved_command_line);
 
+	char *search = "skip_initramf";
+	char *replace = "androidboot.force_normal_boot=1";
 	search_len = strlen(search);
 	replace_len = strlen(replace);
 
