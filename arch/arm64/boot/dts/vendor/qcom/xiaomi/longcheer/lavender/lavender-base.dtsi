@@ -21,7 +21,7 @@
 				dev = "system";
 				type = "ext4";
 				mnt_flags = "ro,barrier=1";
-				fsmgr_flags = "wait,avb=vbmeta,logical";
+				fsmgr_flags = "wait,avb,logical";
 				status = "ok";
 			};
 			system_ext {
@@ -61,7 +61,7 @@
 				compatible = "android,metadata";
 				dev = "/dev/block/by-name/logdump";
 				type = "ext4";
-				mnt_flags = "noatime,nosuid,nodev,data=journal,commit=1";
+				mnt_flags = "noatime,nosuid,nodev";
 				fsmgr_flags = "wait,check,formattable";
 				status = "ok";
 			};
