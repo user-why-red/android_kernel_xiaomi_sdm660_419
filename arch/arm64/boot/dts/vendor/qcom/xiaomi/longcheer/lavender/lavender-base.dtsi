@@ -4,20 +4,6 @@
 #include "sdm660-i2c_f7a.dtsi"
 
 /* msm-pm660.dtsi lavender specific diff */
-&firmware {
-	android {
-		vbmeta {
-			parts = "vbmeta,boot,system,vendor,dtbo,recovery";
-		};
-
-		fstab {
-			vendor {
-				fsmgr_flags = "wait,avb";
-			};
-		};
-	};
-};
-
 &spmi_bus {
 	qcom,pm660@0 {
 		qcom,power-on@800 {

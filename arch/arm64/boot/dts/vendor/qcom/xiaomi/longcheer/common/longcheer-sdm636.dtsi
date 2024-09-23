@@ -5,27 +5,6 @@
 #include "longcheer-sdm660-base.dtsi"
 
 /* sdm660.dtsi tulip/whyred specific diff */
-&firmware {
-	android {
-		/delete-node/ vbmeta;
-		fstab {
-			vendor {
-				mnt_flags = "ro,barrier=1";
-				fsmgr_flags = "wait";
-			};
-
-			system {
-				compatible = "android,system";
-				dev = "/dev/block/platform/soc/c0c4000.sdhci/by-name/system";
-				type = "ext4";
-				mnt_flags = "ro,barrier=1";
-				fsmgr_flags = "wait";
-				status = "ok";
-			};
-		};
-	};
-};
-
 &tlmm {
 	hall_int_active:hall_int_active {
 		mux {
