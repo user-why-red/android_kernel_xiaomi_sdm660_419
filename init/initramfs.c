@@ -603,9 +603,9 @@ static void __init clean_rootfs(void)
 }
 #endif
 
-#if 0
 static int __initdata do_skip_initramfs;
 
+#if 0
 static int __init skip_initramfs_param(char *str)
 {
 	if (*str)
