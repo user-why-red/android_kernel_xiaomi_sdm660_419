@@ -343,8 +343,6 @@
 		android {
 			compatible = "android,firmware";
 
-			boot_devices = "soc/c0c4000.sdhci";
-
 			vbmeta {
 				 compatible = "android,vbmeta";
 				  parts = "vbmeta,boot,system,vendor,dtbo";
@@ -354,11 +352,11 @@
 				compatible = "android,fstab";
 				vendor {
 					compatible = "android,vendor";
-					dev = "/dev/block/platform/soc/c0c4000.sdhci/by-name/vendor";
+		dev = "/dev/block/platform/soc/c0c4000.sdhci/by-name/vendor";
 					type = "ext4";
 					mnt_flags = "ro,barrier=1,discard";
 					fsmgr_flags = "wait,slotselect,avb";
-					status = "disabled";
+					status = "ok";
 				};
 			};
 		};
