@@ -185,8 +185,6 @@
 			qcom,set = <3>;
 			regulator-min-microvolt = <1200000>;
 			regulator-max-microvolt = <1370000>;
-			/* Force NPM follows HW_EN1 */
-			qcom,init-pin-ctrl-mode = <2>;
 			/* Enable follows HW_EN1 */
 			qcom,enable-with-pin-ctrl = <0 2>;
 		};
@@ -224,8 +222,6 @@
 			qcom,set = <3>;
 			regulator-min-microvolt = <1750000>;
 			regulator-max-microvolt = <1900000>;
-			/* Force NPM follows HW_EN1 */
-			qcom,init-pin-ctrl-mode = <2>;
 			/* Enable follows HW_EN1 */
 			qcom,enable-with-pin-ctrl = <0 2>;
 		};
@@ -311,8 +307,6 @@
 			qcom,set = <3>;
 			regulator-min-microvolt = <3200000>;
 			regulator-max-microvolt = <3400000>;
-			/* Force NPM follows HW_EN1 */
-			qcom,init-pin-ctrl-mode = <2>;
 			/* Enable follows HW_EN1 */
 			qcom,enable-with-pin-ctrl = <0 2>;
 		};
