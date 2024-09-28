@@ -41,7 +41,6 @@ static DEFINE_IDR(zram_index_idr);
 /* idr index must be protected */
 static DEFINE_MUTEX(zram_index_mutex);
 
-extern u64 zram_size;
 static int zram_major;
 static char *default_compressor = CONFIG_ZRAM_DEF_COMP;
 
@@ -2189,11 +2188,7 @@ static ssize_t disksize_store(struct device *dev,
 	int err;
 	u32 prio;
 
-	if (zram_size != 0)
-		disksize = zram_size;
-
-	else
-		disksize = (u64)SZ_1G * 2;
+	disksize = (u64)4096 * SZ_1M;
 
 	down_write(&zram->init_lock);
 	if (init_done(zram)) {
