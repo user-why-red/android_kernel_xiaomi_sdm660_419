@@ -603,18 +603,16 @@ static void __init clean_rootfs(void)
 }
 #endif
 
-#if 0
 static int __initdata do_skip_initramfs;
 
 static int __init skip_initramfs_param(char *str)
 {
 	if (*str)
 		return 0;
-	do_skip_initramfs = 1;
+	do_skip_initramfs = !IS_ENABLED(CONFIG_INITRAMFS_IGNORE_SKIP_FLAG);
 	return 1;
 }
 __setup("skip_initramfs", skip_initramfs_param);
-#endif
 
 #ifdef CONFIG_BLK_DEV_RAM
 static void __init populate_initrd_image(char *err)
@@ -643,6 +641,12 @@ static void __init populate_initrd_image(char *err)
 static int __init populate_rootfs(void)
 {
 	char *err;
+
+	if (do_skip_initramfs) {
+		if (initrd_start)
+			free_initrd();
+		return default_rootfs();
+	}
 
 	/* Load the built in initramfs */
 	err = unpack_to_rootfs(__initramfs_start, __initramfs_size);

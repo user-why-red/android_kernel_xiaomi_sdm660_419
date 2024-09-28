@@ -45,6 +45,13 @@
 	};
 };
 
+&firmware {
+	android {
+		/delete-node/ vbmeta;
+		/delete-node/ fstab;
+	};
+};
+
 &qcom_seecom {
 	/delete-property/ qcom,fde-key-size;
 };

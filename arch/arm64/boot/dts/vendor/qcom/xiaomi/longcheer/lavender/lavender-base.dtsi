@@ -4,71 +4,6 @@
 #include "sdm660-i2c_f7a.dtsi"
 
 /* msm-pm660.dtsi lavender specific diff */
-/ {
-	firmware {
-		android {
-			compatible = "android,firmware";
-
-			vbmeta {
-				compatible = "android,vbmeta";
-				parts = "vbmeta,boot,system,system_ext,product,vendor,odm,dtbo,recovery";
-		};
-		
-		fstab {
-			compatible = "android,fstab";
-			system {
-				compatible = "android,system";
-				dev = "system";
-				type = "ext4";
-				mnt_flags = "ro,barrier=1";
-				fsmgr_flags = "wait,avb=vbmeta,logical";
-				status = "ok";
-			};
-			system_ext {
-				compatible = "android,system_ext";
-				dev = "system_ext";
-				type = "ext4";
-				mnt_flags = "ro,barrier=1";
-				fsmgr_flags = "wait,avb,logical";
-				status = "ok";
-			};
-			product {
-				compatible = "android,product";
-				dev = "product";
-				type = "ext4";
-				mnt_flags = "ro,barrier=1";
-				fsmgr_flags = "wait,avb,logical";
-				status = "ok";
-			};
-			vendor {
-				compatible = "android,vendor";
-				dev = "vendor";
-				type = "ext4";
-				mnt_flags = "ro,barrier=1";
-				fsmgr_flags = "wait,avb,logical";
-				status = "ok";
-			};
-			odm {
-				compatible = "android,odm";
-				dev = "odm";
-				type = "ext4";
-				mnt_flags = "ro,barrier=1";
-				fsmgr_flags = "wait,avb,logical";
-				status = "ok";
-				};
-			};
-			metadata {
-				compatible = "android,metadata";
-				dev = "/dev/block/by-name/logdump";
-				type = "ext4";
-				mnt_flags = "noatime,nosuid,nodev,data=journal,commit=1";
-				fsmgr_flags = "wait,check,formattable";
-				status = "ok";
-			};
-		};
-	};
-};
-
 &spmi_bus {
 	qcom,pm660@0 {
 		qcom,power-on@800 {
@@ -136,6 +71,17 @@
 };
 
 /* sdm660.dtsi lavender specific diff */
+&firmware {
+	android {
+		vbmeta {
+			compatible = "android,vbmeta";
+			parts = "vbmeta,boot,system,vendor,dtbo,recovery";
+		};
+
+		/delete-node/ fstab;
+	};
+};
+
 &pil_modem {
 	/delete-property/ qcom,complete-ramdump;
 };
