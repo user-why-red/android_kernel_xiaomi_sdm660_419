@@ -129,7 +129,6 @@ struct rq *task_rq_lock(struct task_struct *p, struct rq_flags *rf)
 		} else {
 			/* Non-atomic context: Use msleep for backoff */
 			while (unlikely(task_on_rq_migrating(p))) {
-				cpu_relax();
 				msleep(backoff);
 				/* Cap at 64ms */
 				if (backoff < 64) {
