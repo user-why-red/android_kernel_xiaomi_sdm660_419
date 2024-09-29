@@ -1751,8 +1751,19 @@ void do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask)
 {
 	struct rq *rq = task_rq(p);
 	bool queued, running;
+	bool mask_changed = false;
 
 	lockdep_assert_held(&p->pi_lock);
+
+	if (!cpumask_equal(&p->cpus_allowed, new_mask)) {
+		cpumask_copy(&p->cpus_allowed, new_mask);
+		atomic_set(&p->nr_cpus_allowed, cpumask_weight(new_mask));
+		mask_changed = true;
+	}
+
+	/* Early exit if the mask is unchanged */
+	if (!mask_changed)
+		return;
 
 	queued = task_on_rq_queued(p);
 	running = task_current(rq, p);
