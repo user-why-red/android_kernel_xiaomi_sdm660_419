@@ -112,12 +112,29 @@ struct rq *task_rq_lock(struct task_struct *p, struct rq_flags *rf)
 		raw_spin_unlock(&rq->lock);
 		raw_spin_unlock_irqrestore(&p->pi_lock, rf->flags);
 
-		while (unlikely(task_on_rq_migrating(p))) {
-			cpu_relax();
-			msleep(backoff);
-			/* Cap at 64ms */
-			if (backoff < 64) {
-				backoff *= 2;
+		/* Determine if we're in an atomic context */
+		if (in_atomic() || in_interrupt()) {
+			/* Atomic context: Use busy-wait with cpu_relax */
+			unsigned int busy_iterations = backoff * 1000;
+
+			while (unlikely(task_on_rq_migrating(p)) && busy_iterations--) {
+ 				cpu_relax();
+			}
+
+			if (busy_iterations == 0) {
+
+				backoff = 1;
+				continue;
+			}
+		} else {
+			/* Non-atomic context: Use msleep for backoff */
+			while (unlikely(task_on_rq_migrating(p))) {
+				cpu_relax();
+				msleep(backoff);
+				/* Cap at 64ms */
+				if (backoff < 64) {
+					backoff *= 2;
+				}
 			}
 		}
 
