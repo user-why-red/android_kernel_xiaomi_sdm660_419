@@ -643,8 +643,9 @@ void wake_up_nohz_cpu(int cpu)
 static inline bool got_nohz_idle_kick(void)
 {
 	int cpu = smp_processor_id();
+	unsigned long flags = atomic_read(nohz_flags(cpu));
 
-	if (!(atomic_read(nohz_flags(cpu)) & NOHZ_KICK_MASK))
+	if (!(flags & NOHZ_KICK_MASK))
 		return false;
 
 	if (idle_cpu(cpu) && !need_resched())
