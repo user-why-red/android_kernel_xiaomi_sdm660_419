@@ -544,8 +544,8 @@ static void dequeue_rt_entity(struct sched_rt_entity *rt_se, unsigned int flags)
 
 static void sched_rt_rq_enqueue(struct rt_rq *rt_rq)
 {
-	struct task_struct *curr = rq_of_rt_rq(rt_rq)->curr;
 	struct rq *rq = rq_of_rt_rq(rt_rq);
+	struct task_struct *curr = rq->curr;
 	struct sched_rt_entity *rt_se;
 
 	int cpu = cpu_of(rq);
