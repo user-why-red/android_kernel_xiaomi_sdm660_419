@@ -355,14 +355,16 @@ static int teo_find_shallower_state(struct cpuidle_driver *drv,
 				    int duration_us, bool no_poll)
 {
 	int i;
+	struct cpuidle_state *drv_states = drv->states;
+	struct cpuidle_state_usage *dev_states_usage = dev->states_usage;
 
 	for (i = state_idx - 1; i >= 0; i--) {
-		if (dev->states_usage[i].disable ||
-				(no_poll && drv->states[i].flags & CPUIDLE_FLAG_POLLING))
+		if (dev_states_usage[i].disable ||
+				(no_poll && drv_states[i].flags & CPUIDLE_FLAG_POLLING))
 			continue;
 
 		state_idx = i;
-		if (drv->states[i].target_residency <= duration_us)
+		if (drv_states[i].target_residency <= duration_us)
 			break;
 	}
 	return state_idx;
