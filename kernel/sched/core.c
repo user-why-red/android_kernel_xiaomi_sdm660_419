@@ -519,7 +519,7 @@ void resched_curr(struct rq *rq)
 
 	lockdep_assert_held(&rq->lock);
 
-	if (unlikely(test_tsk_need_resched(curr)))
+	if (test_tsk_need_resched(curr))
 		return;
 
 	cpu = cpu_of(rq);
@@ -530,11 +530,10 @@ void resched_curr(struct rq *rq)
 		return;
 	}
 
-	if (likely(set_nr_and_not_polling(curr))) {
+	if (set_nr_and_not_polling(curr))
 		smp_send_reschedule(cpu);
-	} else {
+	else
 		trace_sched_wake_idle_without_ipi(cpu);
-	}
 }
 
 void resched_cpu(int cpu)
