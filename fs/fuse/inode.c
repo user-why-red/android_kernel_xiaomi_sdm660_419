@@ -1887,6 +1887,7 @@ static void fuse_fs_cleanup(void)
 
 static struct kobject *fuse_kobj;
 
+#ifdef CONFIG_FUSE_BPF
 static ssize_t fuse_bpf_show(struct kobject *kobj,
 				       struct kobj_attribute *attr, char *buff)
 {
@@ -1895,9 +1896,12 @@ static ssize_t fuse_bpf_show(struct kobject *kobj,
 
 static struct kobj_attribute fuse_bpf_attr =
 		__ATTR_RO(fuse_bpf);
+#endif
 
 static struct attribute *bpf_features[] = {
+#ifdef CONFIG_FUSE_BPF
 	&fuse_bpf_attr.attr,
+#endif
 	NULL,
 };
 
