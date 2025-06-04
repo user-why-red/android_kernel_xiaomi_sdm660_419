@@ -1005,7 +1005,7 @@ static void handle_ovp_fault(struct wled *wled)
 	mutex_lock(&wled->lock);
 	if (wled->auto_calib_done) {
 		pr_warn("ovp triggered after auto calibration\n");
-		if (wled->ovp_count++ > 5) {
+		if (wled->ovp_count++ > 30) {
 			pr_warn("Disabling module since OVP persists\n");
 			rc = regmap_update_bits(wled->regmap,
 				wled->ctrl_addr + WLED_CTRL_MOD_ENABLE,
@@ -1013,9 +1013,9 @@ static void handle_ovp_fault(struct wled *wled)
 			if (!rc)
 				wled->force_mod_disable = true;
 			wled->ovp_count = 0;
+			mutex_unlock(&wled->lock);
+			return;
 		}
-		mutex_unlock(&wled->lock);
-		return;
 	}
 
 	if (wled->ovp_irq > 0 && !wled->ovp_irq_disabled) {
