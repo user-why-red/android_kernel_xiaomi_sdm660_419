@@ -2300,7 +2300,7 @@
 	gpio_keys {
 		status = "okay";
 		compatible = "gpio-keys";
-		input-name = "gpio-keys";
+		label = "gpio-keys";
 		pinctrl-names = "tlmm_gpio_key_active","tlmm_gpio_key_suspend",
 						"default";
 		pinctrl-0 = <&gpio_key_active &key_vol_up_default>;
