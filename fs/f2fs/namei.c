@@ -625,9 +625,8 @@ static int f2fs_unlink(struct inode *dir, struct dentry *dentry)
 	}
 
 	if (unlikely(inode->i_nlink == 0)) {
-		f2fs_msg(inode->i_sb, KERN_WARNING,
-			 "%s: inode (ino=%lx) has zero i_nlink",
-			 __func__, inode->i_ino);
+		pr_warn("F2FS-fs (%s): %s: inode (ino=%lx) has zero i_nlink\n",
+        inode->i_sb->s_id, __func__, inode->i_ino);
 		err = -EFSCORRUPTED;
 		set_sbi_flag(F2FS_I_SB(inode), SBI_NEED_FSCK);
 		f2fs_put_page(page, 0);

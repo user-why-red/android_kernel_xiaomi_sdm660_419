@@ -2414,9 +2414,8 @@ static inline void dec_valid_block_count(struct f2fs_sb_info *sbi,
 
 	spin_lock(&sbi->stat_lock);
 	if (unlikely(sbi->total_valid_block_count < count)) {
-		f2fs_msg(sbi->sb, KERN_WARNING,
-			 "Inconsistent total_valid_block_count:%u, ino:%lu, count:%u",
-			 sbi->total_valid_block_count, inode->i_ino, count);
+		pr_warn("F2FS-fs (%s): Inconsistent total_valid_block_count:%u, ino:%lu, count:%u\n",
+        sbi->sb->s_id, sbi->total_valid_block_count, inode->i_ino, count);
 		sbi->total_valid_block_count = 0;
 		set_sbi_flag(sbi, SBI_NEED_FSCK);
 	} else {
