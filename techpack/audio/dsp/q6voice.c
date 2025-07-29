@@ -4442,7 +4442,8 @@ static int voice_get_avcs_version_per_service(uint32_t service_id)
 		return -EINVAL;
 	}
 
-	if (of_machine_is_compatible("qcom,sdm636") ||
+	if (of_machine_is_compatible("qcom,sdm630") ||
+	    of_machine_is_compatible("qcom,sdm636") ||
 	    of_machine_is_compatible("qcom,sdm660")) {
 		common.is_avcs_version_queried = true;
 		return CVP_VERSION_1;
