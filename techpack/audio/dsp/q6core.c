@@ -657,7 +657,10 @@ static int q6core_get_avcs_fwk_version(void)
 {
 	int ret = 0;
 
-	return -EOPNOTSUPP;
+	if (of_machine_is_compatible("qcom,sdm630") ||
+	    of_machine_is_compatible("qcom,sdm636") ||
+	    of_machine_is_compatible("qcom,sdm660"))
+		return -EOPNOTSUPP;
 
 	mutex_lock(&(q6core_lcl.ver_lock));
 	pr_debug("%s: q6core_avcs_ver_info.status(%d)\n", __func__,
