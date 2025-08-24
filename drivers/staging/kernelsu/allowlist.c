@@ -381,7 +381,7 @@ static void do_save_allow_list(struct work_struct *work)
 
 	list_for_each (pos, &allow_list) {
 		p = list_entry(pos, struct perm_data, list);
-		pr_info("save allow list, name: %s uid :%d, allow: %d\n",
+		pr_info("save allow list, name: %s uid: %d, allow: %d\n",
 			p->profile.key, p->profile.current_uid,
 			p->profile.allow_su);
 

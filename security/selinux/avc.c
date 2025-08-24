@@ -44,6 +44,12 @@
 #define avc_cache_stats_incr(field)	((void)0)
 #endif
 
+#ifdef CONFIG_KSU_SUSFS
+extern u32 susfs_ksu_sid;
+extern u32 susfs_kernel_sid;
+bool susfs_is_avc_log_spoofing_enabled = false;
+#endif
+
 struct avc_entry {
 	u32			ssid;
 	u32			tsid;
@@ -756,13 +762,32 @@ static void avc_audit_pre_callback(struct audit_buffer *ab, void *a)
 static void avc_audit_post_callback(struct audit_buffer *ab, void *a)
 {
 	struct common_audit_data *ad = a;
+	struct selinux_audit_data *sad = ad->selinux_audit_data;
 	audit_log_format(ab, " ");
+#ifdef CONFIG_KSU_SUSFS
+	if (unlikely(sad->tsid == susfs_ksu_sid && susfs_is_avc_log_spoofing_enabled)) {
+		/* Spoof tcontext as kernel */
+		const char *tclass_name = "unknown";
+		if (sad->tclass > 0 && sad->tclass <= ARRAY_SIZE(secclass_map))
+		tclass_name = secclass_map[sad->tclass - 1].name;
+
+		audit_log_format(ab, " scontext=u:r:init:s0");
+		audit_log_format(ab, " tcontext=%s", "u:r:kernel:s0");
+		audit_log_format(ab, " tclass=%s", secclass_map[sad->tclass - 1].name);
+		audit_log_format(ab, " permissive=%u", sad->result ? 0 : 1);
+		goto bypass_orig_flow;
+	}
+#endif
 	avc_dump_query(ab, ad->selinux_audit_data->state,
 		       ad->selinux_audit_data->ssid,
 		       ad->selinux_audit_data->tsid,
 		       ad->selinux_audit_data->tclass);
 	audit_log_format(ab, " permissive=%u",
 			 ad->selinux_audit_data->result ? 0 : 1);
+#ifdef CONFIG_KSU_SUSFS
+bypass_orig_flow:
+#endif
+
 }
 
 /* This is the slow part of avc audit with big stack footprint */
