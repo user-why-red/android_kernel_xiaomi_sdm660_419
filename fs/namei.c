@@ -1655,9 +1655,6 @@ static struct dentry *__lookup_hash(const struct qstr *name,
 		if (susfs_is_base_dentry_android_data_dir(base) &&
 			susfs_is_sus_android_data_d_name_found(name->name))
 		{
-			if (flags & (LOOKUP_CREATE | LOOKUP_EXCL)) {
-				return ERR_PTR(-EACCES);
-			}
 			dentry = lookup_dcache(&susfs_fake_qstr_name, base, flags);
 			found_sus_path = true;
 			goto retry;
@@ -1676,6 +1673,7 @@ retry:
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 	{
 		if (!found_sus_path && !IS_ERR(dentry) && dentry->d_inode && susfs_is_inode_sus_path(dentry->d_inode)) {
+			dput(dentry);
 			dentry = lookup_dcache(&susfs_fake_qstr_name, base, flags);
 			found_sus_path = true;
 			goto retry;
@@ -1751,6 +1749,7 @@ static int lookup_fast(struct nameidata *nd,
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 		if (is_nd_state_lookup_last_and_open_last && dentry && !IS_ERR(dentry) && dentry->d_inode) {
 			if (susfs_is_inode_sus_path(dentry->d_inode)) {
+				dput(dentry);
 				dentry = __d_lookup_rcu(parent, &susfs_fake_qstr_name, &backup_next_seq);
 			}
 		}
@@ -1822,6 +1821,7 @@ skip_orig_flow1:
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 		if (is_nd_state_lookup_last_and_open_last && dentry && !IS_ERR(dentry) && dentry->d_inode) {
 			if (susfs_is_inode_sus_path(dentry->d_inode)) {
+				dput(dentry);
 				dentry = __d_lookup(parent, &susfs_fake_qstr_name);
 			}
 		}
@@ -1920,6 +1920,7 @@ retry:
 	if (is_nd_flags_lookup_last && !found_sus_path) {
 		if (dentry && !IS_ERR(dentry) && dentry->d_inode) {
 			if (susfs_is_inode_sus_path(dentry->d_inode)) {
+				dput(dentry);
 				dentry = d_alloc_parallel(dir, &susfs_fake_qstr_name, &sus_wq);
 				found_sus_path = true;
 				goto retry;
@@ -2348,7 +2349,8 @@ static int link_path_walk(const char *name, struct nameidata *nd)
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 		dentry = nd->path.dentry;
 		if (dentry->d_inode && susfs_is_inode_sus_path(dentry->d_inode)) {
-			// return -ENOENT here since it is walking the sub path of sus path
+			// - No need to dput() here
+			// - return -ENOENT here since it is walking the sub path of sus path 
 			return -ENOENT;
 		}
 #endif
@@ -3495,6 +3497,7 @@ static int lookup_open(struct nameidata *nd, struct path *path,
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 	if (is_nd_state_open_last && dentry && !IS_ERR(dentry) && dentry->d_inode) {
 		if (susfs_is_inode_sus_path(dentry->d_inode)) {
+			dput(dentry);
 			dentry = d_lookup(dir, &susfs_fake_qstr_name);
 			found_sus_path = true;
 		}
@@ -3950,7 +3953,7 @@ struct file *do_filp_open(int dfd, struct filename *pathname,
 	if (unlikely(filp == ERR_PTR(-ESTALE)))
 		filp = path_openat(&nd, op, flags | LOOKUP_REVAL);
 #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
-	if (!IS_ERR(filp) && unlikely(filp->f_inode->i_state & INODE_STATE_OPEN_REDIRECT) && current_uid().val < 2000) {
+	if (!IS_ERR(filp) && unlikely(filp->f_inode->i_mapping->flags & BIT_OPEN_REDIRECT) && current_uid().val < 2000) {
 		fake_pathname = susfs_get_redirected_path(filp->f_inode->i_ino);
 		if (!IS_ERR(fake_pathname)) {
 			restore_nameidata();
