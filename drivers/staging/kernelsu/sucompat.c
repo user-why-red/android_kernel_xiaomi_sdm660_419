@@ -24,12 +24,11 @@
 #include "klog.h" // IWYU pragma: keep
 #include "ksud.h"
 #include "kernel_compat.h"
-#include "include/ksu_creds.h"
 
 #define SU_PATH "/system/bin/su"
 #define SH_PATH "/system/bin/sh"
 
-extern void ksu_escape_to_root();
+extern void escape_to_root();
 
 static const char sh_path[] = "/system/bin/sh";
 static const char ksud_path[] = KSUD_PATH;
@@ -67,7 +66,7 @@ int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
 #endif
 
 #ifndef CONFIG_KSU_SUSFS_SUS_SU
-	if (!ksu_is_allow_uid(ksu_current_uid())) {
+	if (!ksu_is_allow_uid(current_uid().val)) {
 		return 0;
 	}
 #endif
@@ -117,7 +116,7 @@ int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
 #endif
 
 #ifndef CONFIG_KSU_SUSFS_SUS_SU
-	if (!ksu_is_allow_uid(ksu_current_uid())) {
+	if (!ksu_is_allow_uid(current_uid().val)) {
 		return 0;
 	}
 #endif
@@ -182,14 +181,14 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 		return 0;
 
 #ifndef CONFIG_KSU_SUSFS_SUS_SU
-	if (!ksu_is_allow_uid(ksu_current_uid()))
+	if (!ksu_is_allow_uid(current_uid().val))
 		return 0;
 #endif
 
 	pr_info("do_execveat_common su found\n");
 	memcpy((void *)filename->name, ksud_path, sizeof(ksud_path));
 
-	ksu_escape_to_root();
+	escape_to_root();
 
 	return 0;
 }
@@ -232,13 +231,13 @@ int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
 	if (likely(memcmp(path, su, sizeof(su))))
 		return 0;
 
-	if (!ksu_is_allow_uid(ksu_current_uid()))
+	if (!ksu_is_allow_uid(current_uid().val))
 		return 0;
 
 	pr_info("sys_execve su found\n");
 	*filename_user = ksud_user_path();
 
-	ksu_escape_to_root();
+	escape_to_root();
 
 	return 0;
 }
@@ -249,7 +248,7 @@ static int ksu_inline_handle_devpts(struct inode *inode)
 		return 0;
 	}
 
-	uid_t uid = ksu_current_uid();
+	uid_t uid = current_uid().val;
 	if (uid % 100000 < 10000) {
 		// not untrusted_app, ignore it
 		return 0;

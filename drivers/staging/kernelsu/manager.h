@@ -3,7 +3,6 @@
 
 #include <linux/cred.h>
 #include <linux/types.h>
-#include "include/ksu_creds.h"
 
 #define KSU_INVALID_UID -1
 
@@ -19,9 +18,9 @@ static inline bool ksu_is_manager_uid_valid()
 	return ksu_manager_uid != KSU_INVALID_UID;
 }
 
-static inline bool ksu_is_manager()
+static inline bool is_manager()
 {
-	return unlikely(ksu_is_any_manager(ksu_current_uid()) || ksu_manager_uid == ksu_current_uid());
+	return unlikely(ksu_is_any_manager(current_uid().val) || ksu_manager_uid == current_uid().val);
 }
 
 static inline uid_t ksu_get_manager_uid()
