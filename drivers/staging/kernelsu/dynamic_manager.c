@@ -35,9 +35,9 @@ static DEFINE_SPINLOCK(managers_lock);
 static DEFINE_SPINLOCK(dynamic_manager_lock);
 
 // Work queues for persistent storage
-static struct work_struct ksu_save_dynamic_manager_work;
-static struct work_struct ksu_load_dynamic_manager_work;
-static struct work_struct ksu_clear_dynamic_manager_work;
+static struct work_struct save_dynamic_manager_work;
+static struct work_struct load_dynamic_manager_work;
+static struct work_struct clear_dynamic_manager_work;
 
 bool ksu_is_dynamic_manager_enabled(void)
 {
@@ -337,7 +337,7 @@ exit:
 
 static bool persistent_dynamic_manager(void)
 {
-    return ksu_queue_work(&ksu_save_dynamic_manager_work);
+    return ksu_queue_work(&save_dynamic_manager_work);
 }
 
 static void do_clear_dynamic_manager(struct work_struct *work)
@@ -366,7 +366,7 @@ static void do_clear_dynamic_manager(struct work_struct *work)
 
 static bool clear_dynamic_manager_file(void)
 {
-    return ksu_queue_work(&ksu_clear_dynamic_manager_work);
+    return ksu_queue_work(&clear_dynamic_manager_work);
 }
 
 int ksu_handle_dynamic_manager(struct dynamic_manager_user_config *config)
@@ -457,16 +457,16 @@ int ksu_handle_dynamic_manager(struct dynamic_manager_user_config *config)
 
 bool ksu_load_dynamic_manager(void)
 {
-    return ksu_queue_work(&ksu_load_dynamic_manager_work);
+    return ksu_queue_work(&load_dynamic_manager_work);
 }
 
 void ksu_dynamic_manager_init(void)
 {
     int i;
     
-    INIT_WORK(&ksu_save_dynamic_manager_work, do_save_dynamic_manager);
-    INIT_WORK(&ksu_load_dynamic_manager_work, do_load_dynamic_manager);
-    INIT_WORK(&ksu_clear_dynamic_manager_work, do_clear_dynamic_manager);
+    INIT_WORK(&save_dynamic_manager_work, do_save_dynamic_manager);
+    INIT_WORK(&load_dynamic_manager_work, do_load_dynamic_manager);
+    INIT_WORK(&clear_dynamic_manager_work, do_clear_dynamic_manager);
     
     // Initialize manager slots
     for (i = 0; i < MAX_MANAGERS; i++) {

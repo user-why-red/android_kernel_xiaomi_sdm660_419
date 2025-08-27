@@ -49,7 +49,6 @@
 #include "selinux/selinux.h"
 #include "throne_tracker.h"
 #include "kernel_compat.h"
-#include "include/ksu_creds.h"
 #include "dynamic_manager.h"
 
 #ifdef CONFIG_KPM
@@ -59,11 +58,11 @@
 #ifdef CONFIG_KSU_SUSFS
 bool susfs_is_allow_su(void)
 {
-	if (ksu_is_manager()) {
+	if (is_manager()) {
 		// we are manager, allow!
 		return true;
 	}
-	return ksu_is_allow_uid(ksu_current_uid());
+	return ksu_is_allow_uid(current_uid().val);
 }
 
 extern u32 susfs_zygote_sid;
@@ -133,7 +132,7 @@ static inline void susfs_on_post_fs_data(void) {
 
 static bool ksu_module_mounted = false;
 
-extern int ksu_handle_sepolicy(unsigned long arg3, void __user *arg4);
+extern int handle_sepolicy(unsigned long arg3, void __user *arg4);
 
 bool ksu_su_compat_enabled = true;
 extern void ksu_sucompat_init();
@@ -141,11 +140,11 @@ extern void ksu_sucompat_exit();
 
 static inline bool is_allow_su()
 {
-	if (ksu_is_manager()) {
+	if (is_manager()) {
 		// we are manager, allow!
 		return true;
 	}
-	return ksu_is_allow_uid(ksu_current_uid());
+	return ksu_is_allow_uid(current_uid().val);
 }
 
 static inline bool is_unsupported_uid(uid_t uid)
@@ -229,34 +228,33 @@ static void disable_seccomp(struct task_struct *tsk)
 #endif
 }
 
-void ksu_escape_to_root(void)
+void escape_to_root(void)
 {
-	struct cred *newcreds = prepare_creds();
+	struct cred *newcreds;
+
+	if (current_euid().val == 0) {
+		pr_warn("Already root, don't escape!\n");
+		return;
+	}
+	
+	newcreds = prepare_creds();
 	if (newcreds == NULL) {
 		pr_err("%s: failed to allocate new cred.\n", __func__);
 		return;
 	}
 
-	if (ksu_cred_euid(newcreds) == 0) {
-		pr_warn("Already root, don't escape!\n");
-		abort_creds(newcreds);
-		return;
-	}
-
 	struct root_profile *profile =
-		ksu_get_root_profile(ksu_cred_uid(newcreds));
+		ksu_get_root_profile(newcreds->uid.val);
 
-	ksu_cred_uid(newcreds) = profile->uid;
-	ksu_cred_suid(newcreds) = profile->uid;
-	ksu_cred_euid(newcreds) = profile->uid;
-	ksu_cred_fsuid(newcreds) = profile->uid;
+	newcreds->uid.val = profile->uid;
+	newcreds->suid.val = profile->uid;
+	newcreds->euid.val = profile->uid;
+	newcreds->fsuid.val = profile->uid;
 
-	ksu_cred_gid(newcreds) = profile->gid;
-	ksu_cred_fsgid(newcreds) = profile->gid;
-	ksu_cred_sgid(newcreds) = profile->gid;
-	ksu_cred_egid(newcreds) = profile->gid;
-
-	// no wrapper, ignore it.
+	newcreds->gid.val = profile->gid;
+	newcreds->fsgid.val = profile->gid;
+	newcreds->sgid.val = profile->gid;
+	newcreds->egid.val = profile->gid;
 	newcreds->securebits = 0;
 
 	BUILD_BUG_ON(sizeof(profile->capabilities.effective) !=
@@ -280,7 +278,8 @@ void ksu_escape_to_root(void)
 	spin_lock_irq(&current->sighand->siglock);
 	disable_seccomp(current);
 	spin_unlock_irq(&current->sighand->siglock);
-	ksu_setup_selinux(profile->selinux_domain);
+
+	setup_selinux(profile->selinux_domain);
 }
 
 int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry)
@@ -290,7 +289,7 @@ int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry)
 		return 0;
 	}
 
-	if (ksu_current_uid() != 1000) {
+	if (current_uid().val != 1000) {
 		// skip non system uid
 		return 0;
 	}
@@ -317,7 +316,7 @@ int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry)
 	pr_info("renameat: %s -> %s, new path: %s\n", old_dentry->d_iname,
 		new_dentry->d_iname, buf);
 
-	ksu_track_throne();
+	track_throne();
 
 	return 0;
 }
@@ -358,15 +357,15 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 	}
 
 	// TODO: find it in throne tracker!
-	uid_t current_uid_val = ksu_current_uid();
+	uid_t current_uid_val = current_uid().val;
 	uid_t manager_uid = ksu_get_manager_uid();
 	if (current_uid_val != manager_uid &&
 	    current_uid_val % 100000 == manager_uid) {
 		ksu_set_manager_uid(current_uid_val);
 	}
 
-	bool from_root = 0 == ksu_current_uid();
-	bool from_manager = ksu_is_manager();
+	bool from_root = 0 == current_uid().val;
+	bool from_manager = is_manager();
 
 	if (!from_root && !from_manager) {
 		// only root or manager can access this interface
@@ -389,8 +388,8 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 
 	if (arg2 == CMD_GRANT_ROOT) {
 		if (is_allow_su()) {
-			pr_info("allow root for: %d\n", ksu_current_uid());
-			ksu_escape_to_root();
+			pr_info("allow root for: %d\n", current_uid().val);
+			escape_to_root();
 			if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
 				pr_err("grant_root: prctl reply error\n");
 			}
@@ -494,7 +493,7 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 			if (!post_fs_data_lock) {
 				post_fs_data_lock = true;
 				pr_info("post-fs-data triggered\n");
-				ksu_on_post_fs_data();
+				on_post_fs_data();
 				// Initializing Dynamic Signatures
         		ksu_dynamic_manager_init();
         		pr_info("Dynamic sign config loaded during post-fs-data\n");
@@ -525,7 +524,7 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
 		if (!from_root) {
 			return 0;
 		}
-		if (!ksu_handle_sepolicy(arg3, arg4)) {
+		if (!handle_sepolicy(arg3, arg4)) {
 			if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
 				pr_err("sepolicy: prctl reply error\n");
 			}
@@ -1135,7 +1134,7 @@ static bool should_umount(struct path *path)
 
 	if (current->nsproxy->mnt_ns == init_nsproxy.mnt_ns) {
 		pr_info("ignore global mnt namespace process: %d\n",
-			ksu_current_uid());
+			current_uid().val);
 		return false;
 	}
 
@@ -1185,7 +1184,7 @@ static int ksu_sys_umount(const char *mnt, int flags)
 #endif
 
 #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
-void ksu_try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid)
+void try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid)
 #else
 static void try_umount(const char *mnt, bool check_mnt, int flags)
 #endif
@@ -1227,25 +1226,25 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
 void susfs_try_umount_all(uid_t uid) {
 	susfs_try_umount(uid);
 	/* For Legacy KSU only */
-	ksu_try_umount("/system", true, 0, uid);
-	ksu_try_umount("/system_ext", true, 0, uid);
-	ksu_try_umount("/vendor", true, 0, uid);
-	ksu_try_umount("/product", true, 0, uid);
-	ksu_try_umount("/odm", true, 0, uid);
+	try_umount("/system", true, 0, uid);
+	try_umount("/system_ext", true, 0, uid);
+	try_umount("/vendor", true, 0, uid);
+	try_umount("/product", true, 0, uid);
+	try_umount("/odm", true, 0, uid);
 	// - For '/data/adb/modules' we pass 'false' here because it is a loop device that we can't determine whether 
 	//   its dev_name is KSU or not, and it is safe to just umount it if it is really a mountpoint
-	ksu_try_umount("/data/adb/modules", false, MNT_DETACH, uid);
-	ksu_try_umount("/data/adb/kpm", false, MNT_DETACH, uid);
+	try_umount("/data/adb/modules", false, MNT_DETACH, uid);
+	try_umount("/data/adb/kpm", false, MNT_DETACH, uid);
 	/* For both Legacy KSU and Magic Mount KSU */
-	ksu_try_umount("/debug_ramdisk", true, MNT_DETACH, uid);
-	ksu_try_umount("/sbin", false, MNT_DETACH, uid);
+	try_umount("/debug_ramdisk", true, MNT_DETACH, uid);
+	try_umount("/sbin", false, MNT_DETACH, uid);
 	
 	// try umount hosts file
-	ksu_try_umount("/system/etc/hosts", false, MNT_DETACH, uid);
+	try_umount("/system/etc/hosts", false, MNT_DETACH, uid);
 
 	// try umount lsposed dex2oat bins
-	ksu_try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH, uid);
-	ksu_try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH, uid);
+	try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH, uid);
+	try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH, uid);
 }
 #endif
 
@@ -1286,7 +1285,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 			// umount for the system process if path DATA_ADB_UMOUNT_FOR_ZYGOTE_SYSTEM_PROCESS exists
 			if (susfs_is_umount_for_zygote_system_process_enabled) {
-				goto out_ksu_try_umount;
+				goto out_try_umount;
 			}
 #endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 		}
@@ -1341,20 +1340,20 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
 #endif // #ifdef CONFIG_KSU_SUSFS
 
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-out_ksu_try_umount:
+out_try_umount:
 #endif
 	if (!ksu_uid_should_umount(new_uid.val)) {
 		return 0;
 	} else {
 #ifdef CONFIG_KSU_DEBUG
-		pr_info("uid: %d should not umount!\n", ksu_current_uid());
+		pr_info("uid: %d should not umount!\n", current_uid().val);
 #endif
 	}
 #ifndef CONFIG_KSU_SUSFS
  	// check old process's selinux context, if it is not zygote, ignore it!
  	// because some su apps may setuid to untrusted_app but they are in global mount namespace
  	// when we umount for such process, that is a disaster!
-	bool is_zygote_child = ksu_is_zygote(old->security);
+	bool is_zygote_child = is_zygote(old->security);
 #endif
 	if (!is_zygote_child) {
 		pr_info("handle umount ignore non zygote child: %d\n",

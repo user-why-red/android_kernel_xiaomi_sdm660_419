@@ -34,9 +34,6 @@ bool ksu_is_any_manager(uid_t uid);
 int ksu_get_manager_signature_index(uid_t uid);
 int ksu_get_active_managers(struct manager_list_info *info);
 
-// Multi-manager APK verification
-bool ksu_is_dynamic_manager_apk(char *path, int *signature_index);
-
 // Configuration access for signature verification
 bool ksu_get_dynamic_manager_config(unsigned int *size, const char **hash);
 
