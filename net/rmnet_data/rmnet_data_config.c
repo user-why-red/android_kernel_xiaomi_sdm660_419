@@ -1284,7 +1284,6 @@ int rmnet_config_notify_cb(struct notifier_block *nb,
 	LOGL("(..., %lu, %s)", event, dev->name);
 
 	switch (event) {
-	case NETDEV_UNREGISTER_FINAL:
 	case NETDEV_UNREGISTER:
 		trace_rmnet_unregister_cb_entry(dev);
 		LOGH("Kernel is trying to unregister %s", dev->name);
