@@ -486,7 +486,8 @@ static void tb_xdp_handle_request(struct work_struct *work)
 
 	mutex_lock(&tb->lock);
 	if (tb->root_switch)
-		uuid = tb->root_switch->uuid;
+		uuid = kmemdup(tb->root_switch->uuid, sizeof(*uuid),
+			       GFP_KERNEL);
 	else
 		uuid = NULL;
 	mutex_unlock(&tb->lock);
@@ -534,6 +535,7 @@ static void tb_xdp_handle_request(struct work_struct *work)
 	}
 
 out:
+	kfree(uuid);
 	kfree(xw->pkg);
 	kfree(xw);
 }
@@ -1297,6 +1299,9 @@ static struct tb_xdomain *switch_find_xdomain(struct tb_switch *sw,
 	const struct tb_xdomain_lookup *lookup)
 {
 	int i;
+
+	if (!sw)
+		return NULL;
 
 	for (i = 1; i <= sw->config.max_port_number; i++) {
 		struct tb_port *port = &sw->ports[i];
