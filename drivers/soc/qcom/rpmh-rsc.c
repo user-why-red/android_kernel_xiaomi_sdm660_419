@@ -308,6 +308,10 @@ static irqreturn_t tcs_tx_done(int irq, void *p)
 			 */
 			enable_tcs_irq(drv, i, false);
 		}
+		/* Clear AMC trigger & enable modes and
+		 * disable interrupt for this TCS
+		 */
+		__tcs_set_trigger(drv, i, false);
 skip:
 		/* Reclaim the TCS */
 		write_tcs_reg(drv, RSC_DRV_CMD_ENABLE, i, 0);
