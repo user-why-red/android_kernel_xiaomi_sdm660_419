@@ -58,6 +58,13 @@
 #define WLED_CTRL_ILIM			0x4e
 #define  WLED_CTRL_ILIM_MASK		GENMASK(2, 0)
 
+#define WLED_CTRL_LCD_AUTO_PFM				0x5c
+#define  WLED_CTRL_LCD_AUTO_PFM_DFLT_THRESH		1
+#define  WLED_CTRL_LCD_AUTO_PFM_THRESH_MAX		0xF
+#define  WLED_CTRL_LCD_AUTO_PFM_EN_SHIFT		7
+#define  WLED_CTRL_LCD_AUTO_PFM_EN_BIT			BIT(7)
+#define  WLED_CTRL_LCD_AUTO_PFM_THRESH_MASK		GENMASK(3, 0)
+
 #define WLED_CTRL_SHORT_PROTECT		0x5e
 #define  WLED_CTRL_SHORT_EN_MASK	BIT(7)
 
@@ -206,6 +213,7 @@ struct wled_config {
 	int cabc_sel;
 	int sync_dly;
 	bool en_cabc;
+	bool disp_type_amoled;
 	bool ext_pfet_sc_pro_en;
 	bool auto_calib_enabled;
 };
@@ -1247,6 +1255,22 @@ static int wled4_setup(struct wled *wled)
 	if (rc < 0)
 		return rc;
 
+	/* Configure auto PFM mode for LCD mode only */
+	if (is_wled4(wled) && !wled->cfg.disp_type_amoled) {
+		u8 reg = WLED_CTRL_LCD_AUTO_PFM_DFLT_THRESH;
+
+		if (wled->pmic_rev_id->pmic_subtype != PMI8998_SUBTYPE ||
+				wled->pmic_rev_id->rev4 != PMI8998_V2P0_REV4)
+			reg |= 1 << WLED_CTRL_LCD_AUTO_PFM_EN_SHIFT;
+
+		rc = regmap_update_bits(wled->regmap,
+				wled->ctrl_addr + WLED_CTRL_LCD_AUTO_PFM,
+				WLED_CTRL_LCD_AUTO_PFM_EN_BIT |
+				WLED_CTRL_LCD_AUTO_PFM_THRESH_MASK, reg);
+		if (rc < 0)
+			return rc;
+	}
+
 	/* Per sink/string configuration */
 	for (i = 0; (string_cfg >> i) != 0; i++) {
 		if (string_cfg & BIT(i)) {
@@ -1364,6 +1388,7 @@ static const struct wled_config wled4_config_defaults = {
 	.mod_sel = -EINVAL,
 	.cabc_sel = -EINVAL,
 	.en_cabc = 0,
+	.disp_type_amoled = 0,
 	.ext_pfet_sc_pro_en = 0,
 	.auto_calib_enabled = 0,
 };
@@ -1377,6 +1402,7 @@ static const struct wled_config wled5_config_defaults = {
 	.mod_sel = 0,
 	.cabc_sel = 0,
 	.en_cabc = 0,
+	.disp_type_amoled = 0,
 	.ext_pfet_sc_pro_en = 0,
 	.auto_calib_enabled = 0,
 };
@@ -2201,6 +2227,7 @@ static int wled_configure(struct wled *wled, struct device *dev)
 		bool *val_ptr;
 	} bool_opts[] = {
 		{ "qcom,en-cabc", &cfg->en_cabc, },
+		{ "qcom,disp-type-amoled", &cfg->disp_type_amoled, },
 		{ "qcom,ext-pfet-sc-pro", &cfg->ext_pfet_sc_pro_en, },
 		{ "qcom,auto-calibration", &cfg->auto_calib_enabled, },
 	};
