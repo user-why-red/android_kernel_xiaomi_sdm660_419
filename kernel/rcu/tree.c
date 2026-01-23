@@ -3171,7 +3171,7 @@ get_cached_bnode(struct kfree_rcu_cpu *krcp)
 	if (!krcp->nr_bkv_objs)
 		return NULL;
 
-	WRITE_ONCE(krcp->nr_bkv_objs, krcp->nr_bkv_objs - 1);
+	krcp->nr_bkv_objs--;
 	return (struct kvfree_rcu_bulk_data *)
 		llist_del_first(&krcp->bkvcache);
 }
@@ -3185,8 +3185,9 @@ put_cached_bnode(struct kfree_rcu_cpu *krcp,
 		return false;
 
 	llist_add((struct llist_node *) bnode, &krcp->bkvcache);
-	WRITE_ONCE(krcp->nr_bkv_objs, krcp->nr_bkv_objs + 1);
+	krcp->nr_bkv_objs++;
 	return true;
+
 }
 
 static int
@@ -3198,7 +3199,7 @@ drain_page_cache(struct kfree_rcu_cpu *krcp)
 
 	raw_spin_lock_irqsave(&krcp->lock, flags);
 	page_list = llist_del_all(&krcp->bkvcache);
-	WRITE_ONCE(krcp->nr_bkv_objs, 0);
+	krcp->nr_bkv_objs = 0;
 	raw_spin_unlock_irqrestore(&krcp->lock, flags);
 
 	llist_for_each_safe(pos, n, page_list) {
@@ -3576,13 +3577,18 @@ kfree_rcu_shrink_count(struct shrinker *shrink, struct shrink_control *sc)
 {
 	int cpu;
 	unsigned long count = 0;
+	unsigned long flags;
 
 	/* Snapshot count of all CPUs */
 	for_each_possible_cpu(cpu) {
 		struct kfree_rcu_cpu *krcp = per_cpu_ptr(&krc, cpu);
 
 		count += READ_ONCE(krcp->count);
-		count += READ_ONCE(krcp->nr_bkv_objs);
+
+		raw_spin_lock_irqsave(&krcp->lock, flags);
+		count += krcp->nr_bkv_objs;
+		raw_spin_unlock_irqrestore(&krcp->lock, flags);
+
 		atomic_set(&krcp->backoff_page_cache_fill, 1);
 	}
 
