@@ -64,7 +64,7 @@ bpf_lsm_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
 	case BPF_FUNC_sk_storage_delete:
 		return &bpf_sk_storage_delete_proto;
 	default:
-		return tracing_prog_func_proto(func_id, prog);
+		return bpf_base_func_proto(func_id);
 	}
 }
 
