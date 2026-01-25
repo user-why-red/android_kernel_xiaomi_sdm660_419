@@ -28,16 +28,24 @@ static DEFINE_PER_CPU(struct llist_head, lazy_list);
  */
 static bool irq_work_claim(struct irq_work *work)
 {
-	int oflags;
+	int flags, oflags, nflags;
 
-	oflags = atomic_fetch_or(IRQ_WORK_CLAIMED, &work->flags);
 	/*
-	 * If the work is already pending, no need to raise the IPI.
-	 * The pairing atomic_xchg() in irq_work_run() makes sure
-	 * everything we did before is visible.
+	 * Start with our best wish as a premise but only trust any
+	 * flag value after cmpxchg() result.
 	 */
-	if (oflags & IRQ_WORK_PENDING)
-		return false;
+	flags = atomic_read(&work->flags) & ~IRQ_WORK_PENDING;
+	for (;;) {
+		nflags = flags | IRQ_WORK_CLAIMED;
+		oflags = atomic_cmpxchg(&work->flags, flags, nflags);
+		if (oflags == flags)
+			break;
+		if (oflags & IRQ_WORK_PENDING)
+			return false;
+		flags = oflags;
+		cpu_relax();
+	}
+
 	return true;
 }
 
