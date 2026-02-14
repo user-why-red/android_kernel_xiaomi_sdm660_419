@@ -470,15 +470,9 @@ static struct file_system_type sdcardfs_fs_type = {
 };
 MODULE_ALIAS_FS(SDCARDFS_NAME);
 
-extern bool is_inline;
 static int __init init_sdcardfs_fs(void)
 {
 	int err;
-
-	if (is_inline) {
-		pr_info("Scarlet-X: Inline ROM detected! Killing SDCARDFS...\n");
-		return 0;
-	}
 
 	pr_info("Registering sdcardfs " SDCARDFS_VERSION "\n");
 
