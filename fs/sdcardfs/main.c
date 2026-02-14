@@ -477,7 +477,7 @@ static int __init init_sdcardfs_fs(void)
 
 	if (is_inline) {
 		pr_info("Scarlet-X: Inline ROM detected! Killing SDCARDFS...\n");
-		return -ENODEV;
+		return 0;
 	}
 
 	pr_info("Registering sdcardfs " SDCARDFS_VERSION "\n");
