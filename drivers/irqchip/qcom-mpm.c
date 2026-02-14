@@ -595,10 +595,12 @@ static const struct of_device_id mpm_gic_chip_data_table[] = {
 		.data = mpm_scuba_gic_chip_data,
 	},
 #elif defined(CONFIG_QCOM_MPM_SDM660)
+#ifdef CONFIG_ARCH_SDM630
 	{
 		.compatible = "qcom,mpm-gic-sdm630",
 		.data = mpm_sdm630_gic_chip_data,
 	},
+#endif
 	{
 		.compatible = "qcom,mpm-gic-sdm660",
 		.data = mpm_sdm660_gic_chip_data,
