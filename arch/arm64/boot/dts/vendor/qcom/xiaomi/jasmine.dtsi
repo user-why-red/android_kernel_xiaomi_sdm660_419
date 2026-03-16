@@ -6,6 +6,11 @@
 &firmware {
 	android {
 		/delete-node/ vbmeta;
-		/delete-node/ fstab;
+		fstab {
+			vendor {
+				mnt_flags = "ro,barrier=1";
+				fsmgr_flags = "wait,slotselect";
+			};
+		};
 	};
 };

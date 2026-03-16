@@ -78,7 +78,11 @@
 			parts = "vbmeta,boot,system,vendor,dtbo,recovery";
 		};
 
-		/delete-node/ fstab;
+		fstab {
+			vendor {
+				fsmgr_flags = "wait";
+			};
+		};
 	};
 };
 
