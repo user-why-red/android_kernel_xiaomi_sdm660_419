@@ -2,10 +2,3 @@
 
 #include "longcheer/common/longcheer-sdm660.dtsi"
 #include "longcheer/wayne/wayne-common-base.dtsi"
-
-/* sdm660.dtsi wayne specific diff */
-&firmware {
-	android {
-		/delete-node/ vbmeta;
-	};
-};
