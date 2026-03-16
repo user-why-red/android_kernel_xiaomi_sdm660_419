@@ -45,12 +45,6 @@
 	};
 };
 
-&firmware {
-	android {
-		/delete-node/ vbmeta;
-	};
-};
-
 &qcom_seecom {
 	/delete-property/ qcom,fde-key-size;
 };

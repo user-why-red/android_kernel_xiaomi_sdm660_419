@@ -2,9 +2,3 @@
 
 #include "longcheer/common/longcheer-sdm660.dtsi"
 #include "longcheer/wayne/wayne-common-base.dtsi"
-
-&firmware {
-	android {
-		/delete-node/ vbmeta;
-	};
-};
