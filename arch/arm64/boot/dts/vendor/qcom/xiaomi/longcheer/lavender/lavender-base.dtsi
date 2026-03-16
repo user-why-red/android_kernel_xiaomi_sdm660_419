@@ -77,12 +77,6 @@
 			compatible = "android,vbmeta";
 			parts = "vbmeta,boot,system,vendor,dtbo,recovery";
 		};
-
-		fstab {
-			vendor {
-				fsmgr_flags = "wait";
-			};
-		};
 	};
 };
 
