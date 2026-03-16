@@ -4,15 +4,14 @@
 #include "sdm660-i2c_f7a.dtsi"
 
 /* msm-pm660.dtsi lavender specific diff */
-&firmware {
-	android {
-		vbmeta {
-			parts = "vbmeta,boot,system,vendor,dtbo,recovery";
-		};
+/ {
+	firmware {
+		android {
+			compatible = "android,firmware";
 
-		fstab {
-			vendor {
-				fsmgr_flags = "wait,avb";
+			vbmeta {
+				compatible = "android,vbmeta";
+				parts = "vbmeta,boot,system,vendor,dtbo,recovery";
 			};
 		};
 	};
