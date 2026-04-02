@@ -6646,7 +6646,7 @@ static int selinux_bpf(int cmd, union bpf_attr *attr,
 	u32 sid = current_sid();
 	int ret;
 
-	if (capable(CAP_SYS_ADMIN))
+	if (cap_capable(current_cred(), &init_user_ns, CAP_SYS_ADMIN, CAP_OPT_NONE) == 0)
 		return 0;
 
 	switch (cmd) {
@@ -6694,7 +6694,7 @@ static int bpf_fd_pass(struct file *file, u32 sid)
 	struct bpf_map *map;
 	int ret;
 
-	if (capable(CAP_SYS_ADMIN))
+	if (cap_capable(current_cred(), &init_user_ns, CAP_SYS_ADMIN, CAP_OPT_NONE) == 0)
 		return 0;
 
 	if (file->f_op == &bpf_map_fops) {
@@ -6722,7 +6722,7 @@ static int selinux_bpf_map(struct bpf_map *map, fmode_t fmode)
 	u32 sid = current_sid();
 	struct bpf_security_struct *bpfsec;
 
-	if (capable(CAP_SYS_ADMIN))
+	if (cap_capable(current_cred(), &init_user_ns, CAP_SYS_ADMIN, CAP_OPT_NONE) == 0)
 		return 0;
 
 	bpfsec = map->security;
@@ -6736,7 +6736,7 @@ static int selinux_bpf_prog(struct bpf_prog *prog)
 	u32 sid = current_sid();
 	struct bpf_security_struct *bpfsec;
 
-	if (capable(CAP_SYS_ADMIN))
+	if (cap_capable(current_cred(), &init_user_ns, CAP_SYS_ADMIN, CAP_OPT_NONE) == 0)
 		return 0;
 
 	bpfsec = prog->aux->security;
