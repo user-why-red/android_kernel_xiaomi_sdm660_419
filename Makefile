@@ -855,10 +855,10 @@ DEBUG_CFLAGS	+= $(call cc-option, -gsplit-dwarf, -g)
 else
 DEBUG_CFLAGS	+= -g
 endif
-ifeq ($(LLVM_IAS),0)
-KBUILD_AFLAGS	+= -Wa,-gdwarf-2
-else
+ifeq ($(LLVM_IAS),1)
 KBUILD_AFLAGS	+= -g
+else
+KBUILD_AFLAGS	+= -Wa,-gdwarf-2
 endif
 endif
 
