@@ -81,4 +81,3 @@ static inline bool mmc_card_hs400es(struct mmc_card *card)
 }
 
 #endif
-

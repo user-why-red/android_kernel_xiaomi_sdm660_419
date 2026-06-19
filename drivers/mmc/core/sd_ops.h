@@ -31,4 +31,3 @@ int mmc_wait_for_app_cmd(struct mmc_host *host, struct mmc_card *card,
 	struct mmc_command *cmd, int retries);
 
 #endif
-
