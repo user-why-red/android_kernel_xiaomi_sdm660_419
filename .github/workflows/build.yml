@@ -1,0 +1,316 @@
+name: Build Kernel 4.19 SDM660
+
+on:
+  workflow_dispatch:
+    inputs:
+      defconfig:
+        description: 'Defconfig yang dipakai'
+        required: false
+        default: 'vendor/whyred-perf_defconfig'
+      lto_mode:
+        description: 'Mode LTO (thin/full/none)'
+        required: false
+        default: 'thin'
+        type: choice
+        options:
+          - thin
+          - full
+          - none
+      artifact_scope:
+        description: 'File yang diupload sebagai artifact'
+        required: false
+        default: 'ringkas'
+        type: choice
+        options:
+          - ringkas
+          - lengkap
+  push:
+    branches:
+      - back
+
+env:
+  KERNEL_DIR: ${{ github.workspace }}/kernel
+  TC_DIR: ${{ github.workspace }}/toolchain/aosp-clang
+  OUT_DIR: ${{ github.workspace }}/kernel/out
+  AOSP_CLANG_TAG: r547379
+  AOSP_CLANG_URL: https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86
+  # Hapus tanda # di baris bawah ini jika ingin set tanggal build manual/custom.
+  # Jika tetap dikomentari (default), kernel pakai timestamp build asli dari runner.
+  # KBUILD_BUILD_TIMESTAMP="Sun June 21 16:02:52 WIB 2026"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350  # batas runner free 6 jam, beri margin
+
+    steps:
+      # ------------------------------------------------------------------
+      # 1. CHECKOUT SOURCE
+      #    Lebih idiomatik dari git clone manual: otomatis pakai branch/commit
+      #    yang memicu workflow ini, dan shallow clone secara default.
+      # ------------------------------------------------------------------
+      - name: Checkout kernel source
+        uses: actions/checkout@v6
+        with:
+          path: kernel
+
+      # ------------------------------------------------------------------
+      # 2. CEK SISA DISK
+      #    Kernel + toolchain + ccache bisa mendekati batas ~14GB disk
+      #    kosong di runner free. Tampilkan saja di log sebagai peringatan dini.
+      # ------------------------------------------------------------------
+      - name: Cek sisa disk
+        run: df -h /
+
+      # ------------------------------------------------------------------
+      # 3. SWAP TAMBAHAN (selalu aktif, ukuran menyesuaikan mode LTO)
+      #    Cara menonaktifkan swap KHUSUS untuk thin/none (full tetap pakai):
+      #    Tambahkan baris "if:" ini tepat di bawah "- name: Setup swap tambahan":
+      #        if: ${{ (github.event.inputs.lto_mode || 'thin') == 'full' }}
+      #
+      #    Cara menonaktifkan swap TOTAL untuk semua mode (termasuk full):
+      #    Beri tanda # di setiap baris pada step ini (dari "- name:" sampai "free -h").
+      # ------------------------------------------------------------------
+      - name: Setup swap tambahan
+        run: |
+          LTO_MODE="${{ github.event.inputs.lto_mode || 'thin' }}"
+
+          if [ "$LTO_MODE" = "full" ]; then
+            SWAP_SIZE="8G"
+          else
+            SWAP_SIZE="4G"
+          fi
+
+          echo "Menambahkan swap ${SWAP_SIZE} (mode LTO: ${LTO_MODE})..."
+          sudo fallocate -l "$SWAP_SIZE" /swapfile_ci
+          sudo chmod 600 /swapfile_ci
+          sudo mkswap /swapfile_ci
+          sudo swapon /swapfile_ci
+          free -h
+
+      # ------------------------------------------------------------------
+      # 4. INSTALL DEPENDENCIES BUILD
+      # ------------------------------------------------------------------
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison flex libssl-dev libelf-dev \
+            build-essential zip curl git python3 \
+            python-is-python3 ccache llvm lld \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+
+      # ------------------------------------------------------------------
+      # 5. CACHE TOOLCHAIN AOSP CLANG
+      #    (supaya tidak download ulang setiap run)
+      # ------------------------------------------------------------------
+      - name: Cache AOSP Clang toolchain
+        id: cache-toolchain
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.TC_DIR }}
+          key: aosp-clang-${{ env.AOSP_CLANG_TAG }}
+
+      - name: Download AOSP Clang toolchain
+        if: steps.cache-toolchain.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$TC_DIR"
+          curl -L --fail \
+            "${AOSP_CLANG_URL}/+archive/refs/heads/main/clang-${AOSP_CLANG_TAG}.tar.gz" \
+            -o /tmp/clang.tar.gz
+          tar -xzf /tmp/clang.tar.gz -C "$TC_DIR"
+          rm -f /tmp/clang.tar.gz
+
+      # ------------------------------------------------------------------
+      # 6. CACHE CCACHE (mempercepat rebuild berikutnya)
+      # ------------------------------------------------------------------
+      - name: Cache ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.ccache
+          key: ccache-${{ github.event.inputs.defconfig || 'vendor/whyred-perf_defconfig' }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-${{ github.event.inputs.defconfig || 'vendor/whyred-perf_defconfig' }}-
+
+      - name: Setup ccache
+        run: |
+          export CCACHE_DIR=~/.ccache
+          ccache -M 5G
+          ccache -z
+
+      # ------------------------------------------------------------------
+      # 7. SETUP TOOLCHAIN ENV
+      # ------------------------------------------------------------------
+      - name: Setup toolchain PATH
+        run: echo "$TC_DIR/bin" >> "$GITHUB_PATH"
+
+      - name: Show toolchain info
+        run: |
+          which clang
+          clang --version
+
+      # ------------------------------------------------------------------
+      # 7.5. SIAPKAN NAMA ARTIFACT
+      #      Format: kernel-4.19-{branch}-{run_number}-{tanggal}
+      #      Contoh: kernel-4.19-cp-st-7-22062026
+      #      Slash di nama branch (mis. release/v1) diganti jadi "-" karena
+      #      nama artifact tidak boleh mengandung "/".
+      #      Ditaruh sebelum step Build & pakai always() supaya nama ini
+      #      tetap tersedia walau build/verify gagal di tengah jalan -
+      #      dengan begitu log build tetap bisa terupload dengan nama yang benar.
+      # ------------------------------------------------------------------
+      - name: Siapkan nama artifact
+        id: meta
+        if: always()
+        run: |
+          BRANCH_NAME="${{ github.ref_name }}"
+          BRANCH_SAFE="${BRANCH_NAME//\//-}"
+          TANGGAL=$(date +'%d%m%Y')
+          echo "artifact_name=kernel-4.19-${BRANCH_SAFE}-${{ github.run_number }}-${TANGGAL}" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------
+      # 8. BUILD KERNEL (dengan timer)
+      # ------------------------------------------------------------------
+      - name: Build kernel
+        id: build
+        run: |
+          START_TIME=$(date +%s)
+
+          cd "$KERNEL_DIR"
+          mkdir -p "$OUT_DIR"
+
+          DEFCONFIG="${{ github.event.inputs.defconfig || 'vendor/whyred-perf_defconfig' }}"
+          LTO_MODE="${{ github.event.inputs.lto_mode || 'thin' }}"
+
+          CUSTOM_CFLAGS="-march=armv8-a -mno-outline"
+
+          TOOLCHAIN_ARGS=(
+            ARCH=arm64
+            CC="ccache clang"
+            HOSTCC="ccache clang"
+            HOSTCXX="ccache clang++"
+            LD=ld.lld
+            AR=llvm-ar
+            NM=llvm-nm
+            OBJCOPY=llvm-objcopy
+            OBJDUMP=llvm-objdump
+            STRIP=llvm-strip
+            READELF=llvm-readelf
+            OBJSIZE=llvm-size
+            LLVM=1
+            LLVM_IAS=1
+            KBUILD_BUILD_USER=builder
+            KBUILD_BUILD_HOST=ardiantowb
+            CLANG_TRIPLE=aarch64-linux-gnu-
+            CROSS_COMPILE=aarch64-linux-gnu-
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+            KCFLAGS="$CUSTOM_CFLAGS"
+          )
+
+          if [ "$LTO_MODE" != "none" ]; then
+            TOOLCHAIN_ARGS+=(LTO="$LTO_MODE")
+          fi
+
+          # Pakai timestamp custom hanya jika KBUILD_BUILD_TIMESTAMP di-set di atas (env:)
+          if [ -n "${KBUILD_BUILD_TIMESTAMP:-}" ]; then
+            TOOLCHAIN_ARGS+=(KBUILD_BUILD_TIMESTAMP="$KBUILD_BUILD_TIMESTAMP")
+          fi
+
+          echo "=== Defconfig: $DEFCONFIG | LTO: $LTO_MODE ==="
+
+          LOG_FILE="${{ github.workspace }}/build.log"
+
+          make O="$OUT_DIR" "${TOOLCHAIN_ARGS[@]}" "$DEFCONFIG" 2>&1 | tee "$LOG_FILE"
+          make -j"$(nproc --all)" O="$OUT_DIR" "${TOOLCHAIN_ARGS[@]}" 2>&1 | tee -a "$LOG_FILE"
+          BUILD_EXIT=${PIPESTATUS[0]}
+
+          ccache -s | tee -a "$LOG_FILE"
+
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          MIN=$((DURATION / 60))
+          SEC=$((DURATION % 60))
+
+          echo "-----------------------------------------------------"
+          echo "Waktu total kompilasi: ${MIN} menit ${SEC} detik"
+          echo "-----------------------------------------------------"
+
+          # Simpan sebagai output step agar bisa dipakai di step summary/step lain
+          echo "duration_min=${MIN}" >> "$GITHUB_OUTPUT"
+          echo "duration_sec=${SEC}" >> "$GITHUB_OUTPUT"
+          echo "defconfig=${DEFCONFIG}" >> "$GITHUB_OUTPUT"
+          echo "lto_mode=${LTO_MODE}" >> "$GITHUB_OUTPUT"
+
+          exit "$BUILD_EXIT"
+
+      # ------------------------------------------------------------------
+      # 9. CEK HASIL BUILD
+      # ------------------------------------------------------------------
+      - name: Verify build output
+        run: |
+          if [ -f "$OUT_DIR/arch/arm64/boot/Image.gz-dtb" ] || [ -f "$OUT_DIR/arch/arm64/boot/Image.gz" ]; then
+            echo "BUILD BERHASIL"
+          else
+            echo "BUILD GAGAL - file Image.gz tidak ditemukan"
+            exit 1
+          fi
+
+      # ------------------------------------------------------------------
+      # 10. UPLOAD ARTIFACT
+      #     "ringkas"  -> semua file hasil build atau semua yang ada di out/arch/arm64/boot/ (Image, Image.gz,
+      #                   Image.gz-dtb, dan folder dts/.../*.dtb di dalamnya)
+      #     "lengkap"  -> seluruh isi out/ seperti hasil build local (vmlinux,
+      #                   System.map, semua .o, dll). Bisa beberapa GB & lebih lama diupload.
+      # ------------------------------------------------------------------
+      - name: Upload kernel image (ringkas - folder boot)
+        if: ${{ (github.event.inputs.artifact_scope || 'ringkas') == 'ringkas' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: ${{ env.OUT_DIR }}/arch/arm64/boot
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload kernel build (lengkap, seluruh folder out / seperti build local)
+        if: ${{ github.event.inputs.artifact_scope == 'lengkap' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}-out
+          path: ${{ env.OUT_DIR }}
+          if-no-files-found: warn
+          retention-days: 7
+
+      # ------------------------------------------------------------------
+      # 10.5. UPLOAD LOG BUILD
+      #       Selalu jalan (always()) baik build sukses maupun gagal, supaya
+      #       log tetap bisa dicek kalau ada error. File log terpisah dari
+      #       zip kernel, jadi tidak mempengaruhi ukuran/isi artifact kernel.
+      # ------------------------------------------------------------------
+      - name: Upload log build
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}-log
+          path: ${{ github.workspace }}/build.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      # ------------------------------------------------------------------
+      # 11. STEP SUMMARY
+      #     Tampilkan ringkasan build (waktu, defconfig, LTO) langsung di
+      #     halaman run GitHub Actions
+      # ------------------------------------------------------------------
+      - name: Build summary
+        if: always()
+        run: |
+          {
+            echo "## Ringkasan Build Kernel"
+            echo ""
+            echo "| Item | Nilai |"
+            echo "|---|---|"
+            echo "| Defconfig | \`${{ steps.build.outputs.defconfig }}\` |"
+            echo "| Mode LTO | \`${{ steps.build.outputs.lto_mode }}\` |"
+            echo "| Waktu kompilasi | **${{ steps.build.outputs.duration_min }} menit ${{ steps.build.outputs.duration_sec }} detik** |"
+            echo "| Status | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          
