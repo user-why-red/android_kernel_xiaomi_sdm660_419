@@ -171,7 +171,7 @@ static int cgroup_storage_get_next_key(struct bpf_map *_map, void *_key,
 			goto enoent;
 
 		storage = list_next_entry(storage, list);
-		if (!storage)
+		if (list_entry_is_head(storage, &map->list, list))
 			goto enoent;
 	} else {
 		storage = list_first_entry(&map->list,
