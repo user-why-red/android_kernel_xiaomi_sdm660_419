@@ -2686,6 +2686,7 @@ void pn533_unregister_device(struct pn533 *priv)
 	destroy_workqueue(priv->wq);
 
 	skb_queue_purge(&priv->resp_q);
+	skb_queue_purge(&priv->fragment_skb);
 
 	del_timer(&priv->listen_timer);
 
