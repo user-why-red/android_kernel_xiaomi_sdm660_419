@@ -1504,7 +1504,7 @@ static void srpt_handle_cmd(struct srpt_rdma_ch *ch,
 	rc = target_submit_cmd_map_sgls(cmd, ch->sess, srp_cmd->cdb,
 			       &send_ioctx->sense_data[0],
 			       scsilun_to_int(&srp_cmd->lun), data_len,
-			       TCM_SIMPLE_TAG, dir, TARGET_SCF_ACK_KREF,
+			       cmd->sam_task_attr, dir, TARGET_SCF_ACK_KREF,
 			       sg, sg_cnt, NULL, 0, NULL, 0);
 	if (rc != 0) {
 		pr_debug("target_submit_cmd() returned %d for tag %#llx\n", rc,
