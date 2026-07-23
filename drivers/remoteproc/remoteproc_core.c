@@ -1222,6 +1222,11 @@ int rproc_trigger_recovery(struct rproc *rproc)
 	if (ret)
 		return ret;
 
+	if (READ_ONCE(rproc->deleting)) {
+		ret = -ENODEV;
+		goto unlock_mutex;
+	}
+
 	ret = rproc_stop(rproc, true);
 	if (ret)
 		goto unlock_mutex;
@@ -1260,6 +1265,11 @@ static void rproc_crash_handler_work(struct work_struct *work)
 	dev_dbg(dev, "enter %s\n", __func__);
 
 	mutex_lock(&rproc->lock);
+
+	if (READ_ONCE(rproc->deleting)) {
+		mutex_unlock(&rproc->lock);
+		return;
+	}
 
 	if (rproc->state == RPROC_CRASHED || rproc->state == RPROC_OFFLINE) {
 		/* handle only the first crash detected */
@@ -1307,7 +1317,7 @@ int rproc_boot(struct rproc *rproc)
 		return ret;
 	}
 
-	if (rproc->state == RPROC_DELETED) {
+	if (READ_ONCE(rproc->deleting)) {
 		ret = -ENODEV;
 		dev_err(dev, "can't boot deleted rproc %s\n", rproc->name);
 		goto unlock_mutex;
@@ -1631,6 +1641,7 @@ struct rproc *rproc_alloc(struct device *dev, const char *name,
 	INIT_LIST_HEAD(&rproc->dump_segments);
 
 	INIT_WORK(&rproc->crash_handler, rproc_crash_handler_work);
+	spin_lock_init(&rproc->crash_handler_lock);
 
 	rproc->state = RPROC_OFFLINE;
 
@@ -1686,8 +1697,17 @@ EXPORT_SYMBOL(rproc_put);
  */
 int rproc_del(struct rproc *rproc)
 {
+	unsigned long flags;
+
 	if (!rproc)
 		return -EINVAL;
+
+	spin_lock_irqsave(&rproc->crash_handler_lock, flags);
+	WRITE_ONCE(rproc->deleting, true);
+	spin_unlock_irqrestore(&rproc->crash_handler_lock, flags);
+
+	/* Make sure no crash handling is running or queued anymore */
+	cancel_work_sync(&rproc->crash_handler);
 
 	/* TODO: make sure this works with rproc->power > 1 */
 	rproc_shutdown(rproc);
@@ -1763,8 +1783,16 @@ EXPORT_SYMBOL(rproc_get_by_child);
  */
 void rproc_report_crash(struct rproc *rproc, enum rproc_crash_type type)
 {
+	unsigned long flags;
+
 	if (!rproc) {
 		pr_err("NULL rproc pointer\n");
+		return;
+	}
+
+	spin_lock_irqsave(&rproc->crash_handler_lock, flags);
+	if (READ_ONCE(rproc->deleting)) {
+		spin_unlock_irqrestore(&rproc->crash_handler_lock, flags);
 		return;
 	}
 
@@ -1773,6 +1801,7 @@ void rproc_report_crash(struct rproc *rproc, enum rproc_crash_type type)
 
 	/* Have a worker handle the error; ensure system is not suspended */
 	queue_work(system_freezable_wq, &rproc->crash_handler);
+	spin_unlock_irqrestore(&rproc->crash_handler_lock, flags);
 }
 EXPORT_SYMBOL(rproc_report_crash);
 
