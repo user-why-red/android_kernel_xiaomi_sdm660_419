@@ -40,6 +40,7 @@ union power_supply_propval lct_therm_india_level = {1,};
 #endif
 
 extern bool is_global_version;
+extern bool is_cn_version;
 bool lct_backlight_off;
 int LctIsInCall = 0;
 #ifdef CONFIG_MACH_XIAOMI_WAYNE
@@ -2629,7 +2630,7 @@ static void thermal_fb_notifier_resume_work(struct work_struct *work)
 	LctThermal = 1;
 #if defined(CONFIG_MACH_XIAOMI_WHYRED)
 	if (lct_backlight_off && !LctIsInCall) {
-		if (!is_global_version) {
+		if (!is_global_version || !is_cn_version) {
 			if (lct_therm_lvl_reserved.intval >= 2)
 				smblib_set_prop_system_temp_level(chg,
 						&lct_therm_india_level);
