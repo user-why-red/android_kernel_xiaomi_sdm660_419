@@ -2947,10 +2947,13 @@ fail_smb1351_regulator_init:
 
 #ifdef CONFIG_MACH_LONGCHEER
 bool is_global_version;
+bool is_cn_version;
 
 static int __init hwc_setup(char *s)
 {
 	is_global_version = !strcmp(s, "Global");
+	is_cn_version = !strcmp(s, "CN");
+	pr_info("HWC setup: is_global_version = %d, is_cn_version = %d\n", is_global_version, is_cn_version);
 	return 1;
 }
 
@@ -2966,8 +2969,8 @@ static int smb1351_parallel_charger_probe(struct i2c_client *client,
 	struct power_supply_config parallel_psy_cfg = {};
 
 #ifdef CONFIG_MACH_LONGCHEER
-	if (is_global_version && !IS_ENABLED(CONFIG_MACH_XIAOMI_WAYNE) &&
-	    !IS_ENABLED(CONFIG_MACH_XIAOMI_LAVENDER)) {
+	if ((is_global_version || is_cn_version) && !IS_ENABLED(CONFIG_MACH_XIAOMI_WAYNE) &&
+	        !IS_ENABLED(CONFIG_MACH_XIAOMI_LAVENDER)) {
 		pr_info("Global version doesn't have smb1351 regulator, killing probe\n");
 		return -ENODEV;
 	}
