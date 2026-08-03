@@ -746,16 +746,28 @@ static int rproc_handle_resources(struct rproc *rproc,
 		return 0;
 
 	for (i = 0; i < rproc->table_ptr->num; i++) {
-		int offset = rproc->table_ptr->offset[i];
-		struct fw_rsc_hdr *hdr = (void *)rproc->table_ptr + offset;
-		int avail = rproc->table_sz - offset - sizeof(*hdr);
-		void *rsc = (void *)hdr + sizeof(*hdr);
+		u32 offset = rproc->table_ptr->offset[i];
+		struct fw_rsc_hdr *hdr;
+		int avail, rsc_offset;
+		void *rsc;
 
-		/* make sure table isn't truncated */
-		if (avail < 0) {
+		/*
+		 * table->offset[] comes from untrusted firmware; validate it
+		 * with unsigned comparisons before deriving any pointer from
+		 * it, otherwise a negative (wrapped) int value bypasses the
+		 * truncation check and points hdr outside of the table.
+		 */
+		if (offset < sizeof(*rproc->table_ptr) ||
+		    offset >= rproc->table_sz ||
+		    rproc->table_sz - offset < sizeof(*hdr)) {
 			dev_err(dev, "rsc table is truncated\n");
 			return -EINVAL;
 		}
+
+		hdr = (void *)rproc->table_ptr + offset;
+		avail = rproc->table_sz - offset - sizeof(*hdr);
+		rsc_offset = offset + sizeof(*hdr);
+		rsc = (void *)hdr + sizeof(*hdr);
 
 		dev_dbg(dev, "rsc: type %d\n", hdr->type);
 
@@ -768,7 +780,7 @@ static int rproc_handle_resources(struct rproc *rproc,
 		if (!handler)
 			continue;
 
-		ret = handler(rproc, rsc, offset + sizeof(*hdr), avail);
+		ret = handler(rproc, rsc, rsc_offset, avail);
 		if (ret)
 			break;
 	}
