@@ -248,7 +248,7 @@ max6621_read(struct device *dev, enum hwmon_sensor_types type, u32 attr,
 			if (ret)
 				return ret;
 
-			*val = (regval >> MAX6621_REG_TEMP_SHIFT) *
+			*val = ((s16)regval >> MAX6621_REG_TEMP_SHIFT) *
 			       1000L;
 
 			break;
@@ -263,7 +263,7 @@ max6621_read(struct device *dev, enum hwmon_sensor_types type, u32 attr,
 			if (ret)
 				return ret;
 
-			*val = regval * 1000L;
+			*val = (s16)regval * 1000L;
 
 			break;
 		case hwmon_temp_crit_alarm:
