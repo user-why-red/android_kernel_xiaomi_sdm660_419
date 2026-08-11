@@ -133,12 +133,12 @@ static int bpf_output(struct net *net, struct sock *sk, struct sk_buff *skb)
 	return dst->lwtstate->orig_output(net, sk, skb);
 }
 
-static int xmit_check_hhlen(struct sk_buff *skb)
+static int xmit_check_headroom(struct sk_buff *skb)
 {
-	int hh_len = skb_dst(skb)->dev->hard_header_len;
+	int hroom = LL_RESERVED_SPACE(skb_dst(skb)->dev);
 
-	if (skb_headroom(skb) < hh_len) {
-		int nhead = HH_DATA_ALIGN(hh_len - skb_headroom(skb));
+	if (skb_headroom(skb) < hroom) {
+		int nhead = hroom - skb_headroom(skb);
 
 		if (pskb_expand_head(skb, nhead, 0, GFP_ATOMIC))
 			return -ENOMEM;
@@ -160,9 +160,12 @@ static int bpf_xmit(struct sk_buff *skb)
 		switch (ret) {
 		case BPF_OK:
 			/* If the header was expanded, headroom might be too
-			 * small for L2 header to come, expand as needed.
+			 * small for the L2 header to come, expand as needed.
+			 * neigh_hh_output() copies the cached header in
+			 * HH_DATA_MOD aligned chunks, so match the reservation
+			 * made before LWT xmit.
 			 */
-			ret = xmit_check_hhlen(skb);
+			ret = xmit_check_headroom(skb);
 			if (unlikely(ret))
 				return ret;
 
