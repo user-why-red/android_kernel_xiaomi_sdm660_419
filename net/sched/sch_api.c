@@ -957,6 +957,9 @@ static int qdisc_graft(struct net_device *dev, struct Qdisc *parent,
 	if (parent == NULL) {
 		unsigned int i, num_q, ingress;
 
+		if (new)
+			new->depth = 0;
+
 		ingress = 0;
 		num_q = dev->num_tx_queues;
 		if ((q && q->flags & TCQ_F_INGRESS) ||
@@ -1014,6 +1017,11 @@ skip:
 		    parent && !(parent->flags & TCQ_F_NOLOCK))
 			new->flags &= ~TCQ_F_NOLOCK;
 
+		if (new && parent->depth >= 7) {
+			NL_SET_ERR_MSG(extack, "Qdisc hierarchy is too deep");
+			return -E2BIG;
+		}
+
 		err = -EOPNOTSUPP;
 		if (cops && cops->graft) {
 			unsigned long cl = cops->find(parent, classid);
@@ -1030,8 +1038,11 @@ skip:
 				err = -ENOENT;
 			}
 		}
-		if (!err)
+		if (!err) {
+			if (new)
+				new->depth = parent->depth + 1;
 			notify_and_destroy(net, skb, n, classid, old, new);
+		}
 	}
 	return err;
 }
