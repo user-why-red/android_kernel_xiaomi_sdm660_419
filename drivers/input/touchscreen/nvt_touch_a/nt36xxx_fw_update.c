@@ -38,6 +38,7 @@ extern char g_lcd_id[128];
 extern uint8_t tp_maker_cg_lamination;
 extern uint8_t display_maker;
 extern uint8_t hw_version;
+extern int32_t nvt_get_xiaomi_lockdown_info(void);
 /* add by yangjiangzhu compatible to shenchao and tianma TP FW  2018/3/16  end */
 
 /*******************************************************
@@ -81,11 +82,11 @@ int32_t update_firmware_request(char *filename)
 
 /*******************************************************
 Description:
-Novatek touchscreen release update firmware function.
+	Novatek touchscreen release update firmware function.
 
 return:
-n.a.
- *******************************************************/
+	n.a.
+*******************************************************/
 void update_firmware_release(void)
 {
 	if (fw_entry) {
@@ -96,12 +97,12 @@ void update_firmware_release(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen check firmware version function.
+	Novatek touchscreen check firmware version function.
 
 return:
-Executive outcomes. 0---need update. 1---need not
-update.
- *******************************************************/
+	Executive outcomes. 0---need update. 1---need not
+	update.
+*******************************************************/
 int32_t Check_FW_Ver(void)
 {
 	uint8_t buf[16] = {0};
@@ -146,11 +147,11 @@ int32_t Check_FW_Ver(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen resume from deep power down function.
+	Novatek touchscreen resume from deep power down function.
 
 return:
-Executive outcomes. 0---succeed. negative---failed.
- *******************************************************/
+	Executive outcomes. 0---succeed. negative---failed.
+*******************************************************/
 int32_t Resume_PD(void)
 {
 	uint8_t buf[8] = {0};
@@ -194,12 +195,12 @@ int32_t Resume_PD(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen check firmware checksum function.
+	Novatek touchscreen check firmware checksum function.
 
 return:
-Executive outcomes. 0---checksum not match.
-1---checksum match. -1--- checksum read failed.
- *******************************************************/
+	Executive outcomes. 0---checksum not match.
+	1---checksum match. -1--- checksum read failed.
+*******************************************************/
 int32_t Check_CheckSum(void)
 {
 	uint8_t buf[64] = {0};
@@ -297,12 +298,12 @@ int32_t Check_CheckSum(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen initial bootloader and flash
-block function.
+	Novatek touchscreen initial bootloader and flash
+	block function.
 
 return:
-Executive outcomes. 0---succeed. negative---failed.
- *******************************************************/
+	Executive outcomes. 0---succeed. negative---failed.
+*******************************************************/
 int32_t Init_BootLoader(void)
 {
 	uint8_t buf[64] = {0};
@@ -351,11 +352,11 @@ int32_t Init_BootLoader(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen erase flash sectors function.
+	Novatek touchscreen erase flash sectors function.
 
 return:
-Executive outcomes. 0---succeed. negative---failed.
- *******************************************************/
+	Executive outcomes. 0---succeed. negative---failed.
+*******************************************************/
 int32_t Erase_Flash(void)
 {
 	uint8_t buf[64] = {0};
@@ -562,11 +563,11 @@ int32_t Erase_Flash(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen write flash sectors function.
+	Novatek touchscreen write flash sectors function.
 
 return:
-Executive outcomes. 0---succeed. negative---failed.
- *******************************************************/
+	Executive outcomes. 0---succeed. negative---failed.
+*******************************************************/
 int32_t Write_Flash(void)
 {
 	uint8_t buf[64] = {0};
@@ -642,7 +643,7 @@ int32_t Write_Flash(void)
 		else
 			tmpvalue=(Flash_Address >> 16) + ((Flash_Address >> 8) & 0xFF) + (Flash_Address & 0xFF) + 0x00 + (fw_entry->size - Flash_Address - 1);
 
-		for (k = 0;k < min(fw_entry->size - Flash_Address, (size_t)256); k++)
+		for (k = 0;k < min(fw_entry->size - Flash_Address,(size_t)256); k++)
 			tmpvalue += fw_entry->data[Flash_Address + k];
 
 		tmpvalue = 255 - tmpvalue + 1;
@@ -654,7 +655,7 @@ int32_t Write_Flash(void)
 		buf[3] = ((Flash_Address >> 8) & 0xFF);
 		buf[4] = (Flash_Address & 0xFF);
 		buf[5] = 0x00;
-		buf[6] = min(fw_entry->size - Flash_Address, (size_t)256) - 1;
+		buf[6] = min(fw_entry->size - Flash_Address,(size_t)256) - 1;
 		buf[7] = tmpvalue;
 		ret = CTP_I2C_WRITE(ts->client, I2C_HW_Address, buf, 8);
 		if (ret < 0) {
@@ -731,12 +732,12 @@ int32_t Write_Flash(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen verify checksum of written
-flash function.
+	Novatek touchscreen verify checksum of written
+	flash function.
 
 return:
-Executive outcomes. 0---succeed. negative---failed.
- *******************************************************/
+	Executive outcomes. 0---succeed. negative---failed.
+*******************************************************/
 int32_t Verify_Flash(void)
 {
 	uint8_t buf[64] = {0};
@@ -829,11 +830,11 @@ int32_t Verify_Flash(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen update firmware function.
+	Novatek touchscreen update firmware function.
 
 return:
-Executive outcomes. 0---succeed. negative---failed.
- *******************************************************/
+	Executive outcomes. 0---succeed. negative---failed.
+*******************************************************/
 int32_t Update_Firmware(void)
 {
 	int32_t ret = 0;
@@ -880,11 +881,11 @@ int32_t Update_Firmware(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen check flash end flag function.
+	Novatek touchscreen check flash end flag function.
 
 return:
-Executive outcomes. 0---succeed. 1,negative---failed.
- *******************************************************/
+	Executive outcomes. 0---succeed. 1,negative---failed.
+*******************************************************/
 #define NVT_FLASH_END_FLAG_LEN 3
 #define NVT_FLASH_END_FLAG_ADDR 0x1AFFD
 int32_t nvt_check_flash_end_flag(void)
@@ -915,7 +916,7 @@ int32_t nvt_check_flash_end_flag(void)
 	}
 	msleep(10);
 
-	//Step 4 : Flash Read Command
+
 	buf[0] = 0x00;
 	buf[1] = 0x03;
 	buf[2] = (NVT_FLASH_END_FLAG_ADDR >> 16) & 0xFF;
@@ -930,7 +931,7 @@ int32_t nvt_check_flash_end_flag(void)
 	}
 	msleep(10);
 
-	// Check 0xAA (Read Command)
+
 	buf[0] = 0x00;
 	buf[1] = 0x00;
 	ret = CTP_I2C_READ(ts->client, I2C_HW_Address, buf, 2);
@@ -945,7 +946,7 @@ int32_t nvt_check_flash_end_flag(void)
 
 	msleep(10);
 
-	//Step 5 : Read Flash Data
+
 	buf[0] = 0xFF;
 	buf[1] = (ts->mmap->READ_FLASH_CHECKSUM_ADDR >> 16) & 0xFF;
 	buf[2] = (ts->mmap->READ_FLASH_CHECKSUM_ADDR >> 8) & 0xFF;
@@ -956,7 +957,7 @@ int32_t nvt_check_flash_end_flag(void)
 	}
 	msleep(10);
 
-	// Read Back
+
 	buf[0] = ts->mmap->READ_FLASH_CHECKSUM_ADDR & 0xFF;
 	ret = CTP_I2C_READ(ts->client, I2C_BLDR_Address, buf, 6);
 	if (ret < 0) {
@@ -978,34 +979,33 @@ int32_t nvt_check_flash_end_flag(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen update firmware when booting
-function.
+	Novatek touchscreen update firmware when booting
+	function.
 
 return:
-n.a.
- *******************************************************/
+	n.a.
+*******************************************************/
 void Boot_Update_Firmware(struct work_struct *work)
 {
 	int32_t ret = 0;
 
 	char firmware_name[256] = "";
 
-
+	nvt_get_xiaomi_lockdown_info();
+	
 	/* add by yangjiangzhu compatible to shenchao and tianma TP FW  2018/3/16  start */
-#ifdef CONFIG_KERNEL_CUSTOM_FACTORY
-	NVT_LOG("Close the TP FW upgrade feature in longcheer factory version\n");
-	return;
-#endif
-	if (strstr(g_lcd_id, "tianma nt36672a") != NULL) {
-		sprintf(firmware_name, BOOT_UPDATE_FIRMWARE_NAME_TIANMA);
-		NVT_LOG("firmware version is tianma. \n");
-	} else if (strstr(g_lcd_id, "shenchao nt36672a") != NULL) {
-		sprintf(firmware_name, BOOT_UPDATE_FIRMWARE_NAME_SHENCHAO);
-		NVT_LOG("firmware version is shenchao. \n");
-	} else {
-		sprintf(firmware_name, "Unknow");
-		NVT_LOG("firmware version is unkonw. \n");
-	}
+	if (strstr(g_lcd_id,"shenchao nt36672a fhdplus video mode dsi panel") != NULL) {
+			sprintf(firmware_name, BOOT_UPDATE_FIRMWARE_NAME_SHENCHAO);
+			NVT_LOG("firmware version is shenchao. \n");
+		}
+	else if (tp_maker_cg_lamination == 0x46 && display_maker == 0x36 && hw_version == 0x03){
+			sprintf(firmware_name, BOOT_UPDATE_FIRMWARE_NAME_TIANMA_GG5);
+			NVT_LOG("firmware version is tianma gg5. \n");
+		}
+	else {
+			sprintf(firmware_name, BOOT_UPDATE_FIRMWARE_NAME_TIANMA);
+			NVT_LOG("firmware version is tianma. \n");
+		 }
 	/* add by yangjiangzhu compatible to shenchao and tianma TP FW	2018/3/16  end */
 
 
@@ -1014,8 +1014,6 @@ void Boot_Update_Firmware(struct work_struct *work)
 		NVT_ERR("update_firmware_request failed. (%d)\n", ret);
 		return;
 	}
-
-	ts->touch_state = TOUCH_STATE_UPGRADING;
 
 	mutex_lock(&ts->lock);
 
@@ -1049,9 +1047,6 @@ void Boot_Update_Firmware(struct work_struct *work)
 	mutex_unlock(&ts->lock);
 
 	update_firmware_release();
-
 	nvt_get_fw_info();
-
-	ts->touch_state = TOUCH_STATE_WORKING;
 }
 #endif /* BOOT_UPDATE_FIRMWARE */

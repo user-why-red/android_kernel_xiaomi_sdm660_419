@@ -87,6 +87,8 @@ static struct proc_dir_entry *NVT_proc_selftest_entry = NULL;
 
 static int8_t nvt_mp_test_result_printed = 0;
 
+static int test_result = 0;
+
 extern void nvt_change_mode(uint8_t mode);
 extern uint8_t nvt_get_fw_pipe(void);
 extern void nvt_read_mdata(uint32_t xdata_addr, uint32_t xdata_btn_addr);
@@ -220,11 +222,11 @@ static int nvt_mp_buffer_init(void)
 
 /*******************************************************
 Description:
-Novatek touchscreen self-test criteria print function.
+	Novatek touchscreen self-test criteria print function.
 
 return:
-n.a.
- *******************************************************/
+	n.a.
+*******************************************************/
 static void nvt_print_lmt_array(int32_t *array, int32_t x_ch, int32_t y_ch)
 {
 	int32_t i = 0;
@@ -340,7 +342,7 @@ static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch, uint8_t y
 			sprintf(fbufp + iArrayIndex * 7 + y * 2, "%5d, ", rawdata[iArrayIndex]);
 		}
 		printk("\n");
-		sprintf(fbufp + (iArrayIndex + 1) * 7 + y * 2, "\r\n");
+		sprintf(fbufp + (iArrayIndex + 1) * 7 + y * 2,"\r\n");
 	}
 #if TOUCH_KEY_NUM > 0
 	keydata_output_offset = y_ch * x_ch * 7 + y_ch * 2;
@@ -773,7 +775,7 @@ static void nvt_enable_short_test(void)
 	CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 5);
 }
 
-static int32_t nvt_read_fw_open(int32_t *xdata)
+static int32_t nvt_read_fw_open(int32_t *xdata,int test_flag)
 {
 	uint32_t raw_pipe_addr = 0;
 	uint8_t *rawdata_buf = NULL;
@@ -863,18 +865,19 @@ static int32_t nvt_read_fw_open(int32_t *xdata)
 
 
 	printk("%s:RawData_Open\n", __func__);
+	if (test_flag == 1) {
 
-	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, OPEN_TEST_CSV_FILE, 0) < 0) {
-		NVT_ERR("save rawdata to CSV file failed\n");
-		return -EAGAIN;
+		if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, OPEN_TEST_CSV_FILE, 0) < 0) {
+			NVT_ERR("save rawdata to CSV file failed\n");
+			return -EAGAIN;
+		}
 	}
-
 	NVT_LOG("--\n");
 
 	return 0;
 }
 
-static int32_t nvt_read_fw_short(int32_t *xdata)
+static int32_t nvt_read_fw_short(int32_t *xdata, int test_flag)
 {
 	uint32_t raw_pipe_addr = 0;
 	uint8_t *rawdata_buf = NULL;
@@ -902,9 +905,9 @@ static int32_t nvt_read_fw_short(int32_t *xdata)
 	}
 
 #if TOUCH_KEY_NUM > 0
-	rawdata_buf = (uint8_t *)kzalloc((X_Channel * Y_Channel + Key_Channel) * 2, GFP_KERNEL);
+    rawdata_buf = (uint8_t *)kzalloc((X_Channel * Y_Channel + Key_Channel) * 2, GFP_KERNEL);
 #else
-	rawdata_buf = (uint8_t *)kzalloc(X_Channel * Y_Channel * 2, GFP_KERNEL);
+    rawdata_buf = (uint8_t *)kzalloc(X_Channel * Y_Channel * 2, GFP_KERNEL);
 #endif /* #if TOUCH_KEY_NUM > 0 */
 	if (!rawdata_buf) {
 		NVT_ERR("kzalloc for rawdata_buf failed!\n");
@@ -1021,6 +1024,7 @@ static int32_t nvt_read_fw_short(int32_t *xdata)
 	else
 		printk("%s:RawData_Short\n", __func__);
 
+	if (test_flag == 1) {
 	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, SHORT_TEST_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
@@ -1036,9 +1040,9 @@ static int32_t nvt_read_fw_short(int32_t *xdata)
 		if (nvt_save_rawdata_to_csv(RawData_Short_Base, X_Channel, Y_Channel, SHORT_TEST_CSV_FILE, rawdata_short_base_offset) < 0) {
 			NVT_ERR("save rawdata to CSV file failed\n");
 			return -EAGAIN;
+			}
 		}
 	}
-
 	NVT_LOG("--\n");
 
 	return 0;
@@ -1046,17 +1050,17 @@ static int32_t nvt_read_fw_short(int32_t *xdata)
 
 /*******************************************************
 Description:
-Novatek touchscreen raw data test for each single point function.
+	Novatek touchscreen raw data test for each single point function.
 
 return:
-Executive outcomes. 0---passed. negative---failed.
- *******************************************************/
+	Executive outcomes. 0---passed. negative---failed.
+*******************************************************/
 static int32_t RawDataTest_SinglePoint_Sub(int32_t rawdata[], uint8_t RecordResult[], uint8_t x_ch, uint8_t y_ch, int32_t Rawdata_Limit_Postive[], int32_t Rawdata_Limit_Negative[])
 {
 	int32_t i = 0;
 	int32_t j = 0;
 #if TOUCH_KEY_NUM > 0
-	int32_t k = 0;
+    int32_t k = 0;
 #endif /* #if TOUCH_KEY_NUM > 0 */
 	int32_t iArrayIndex = 0;
 	bool isPass = true;
@@ -1093,7 +1097,6 @@ static int32_t RawDataTest_SinglePoint_Sub(int32_t rawdata[], uint8_t RecordResu
 		for (i = 0; i < x_ch; i++) {
 			if (RecordResult[j * x_ch + i] != 0) {
 				isPass = false;
-				LOGV("(x=%d, y=%d) failed!\n", i, j);
 				break;
 			}
 		}
@@ -1117,11 +1120,11 @@ static int32_t RawDataTest_SinglePoint_Sub(int32_t rawdata[], uint8_t RecordResu
 
 /*******************************************************
 Description:
-Novatek touchscreen print self-test result function.
+	Novatek touchscreen print self-test result function.
 
 return:
-n.a.
- *******************************************************/
+	n.a.
+*******************************************************/
 void print_selftest_result(struct seq_file *m, int32_t TestResult, uint8_t RecordResult[], int32_t rawdata[], uint8_t x_len, uint8_t y_len)
 {
 	int32_t i = 0;
@@ -1132,69 +1135,69 @@ void print_selftest_result(struct seq_file *m, int32_t TestResult, uint8_t Recor
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	switch (TestResult) {
-	case 0:
-		nvt_mp_seq_printf(m, " PASS!\n");
-		break;
+		case 0:
+			nvt_mp_seq_printf(m, " PASS!\n");
+			break;
 
-	case 1:
-		nvt_mp_seq_printf(m, " ERROR! Read Data FAIL!\n");
-		break;
+		case 1:
+			nvt_mp_seq_printf(m, " ERROR! Read Data FAIL!\n");
+			break;
 
-	case -1:
-		nvt_mp_seq_printf(m, " FAIL!\n");
-		nvt_mp_seq_printf(m, "RecordResult:\n");
-		for (i = 0; i < y_len; i++) {
-			for (j = 0; j < x_len; j++) {
-				iArrayIndex = i * x_len + j;
+		case -1:
+			nvt_mp_seq_printf(m, " FAIL!\n");
+			nvt_mp_seq_printf(m, "RecordResult:\n");
+			for (i = 0; i < y_len; i++) {
+				for (j = 0; j < x_len; j++) {
+					iArrayIndex = i * x_len + j;
+					nvt_mp_seq_printf(m, "0x%02X, ", RecordResult[iArrayIndex]);
+				}
+				nvt_mp_seq_printf(m, "\n");
+			}
+#if TOUCH_KEY_NUM > 0
+			for (k = 0; k < Key_Channel; k++) {
+				iArrayIndex = y_len * x_len + k;
 				nvt_mp_seq_printf(m, "0x%02X, ", RecordResult[iArrayIndex]);
 			}
 			nvt_mp_seq_printf(m, "\n");
-		}
-#if TOUCH_KEY_NUM > 0
-		for (k = 0; k < Key_Channel; k++) {
-			iArrayIndex = y_len * x_len + k;
-			nvt_mp_seq_printf(m, "0x%02X, ", RecordResult[iArrayIndex]);
-		}
-		nvt_mp_seq_printf(m, "\n");
 #endif /* #if TOUCH_KEY_NUM > 0 */
-		nvt_mp_seq_printf(m, "ReadData:\n");
-		for (i = 0; i < y_len; i++) {
-			for (j = 0; j < x_len; j++) {
-				iArrayIndex = i * x_len + j;
+			nvt_mp_seq_printf(m, "ReadData:\n");
+			for (i = 0; i < y_len; i++) {
+				for (j = 0; j < x_len; j++) {
+					iArrayIndex = i * x_len + j;
+					nvt_mp_seq_printf(m, "%5d, ", rawdata[iArrayIndex]);
+				}
+				nvt_mp_seq_printf(m, "\n");
+			}
+#if TOUCH_KEY_NUM > 0
+			for (k = 0; k < Key_Channel; k++) {
+				iArrayIndex = y_len * x_len + k;
 				nvt_mp_seq_printf(m, "%5d, ", rawdata[iArrayIndex]);
 			}
 			nvt_mp_seq_printf(m, "\n");
-		}
-#if TOUCH_KEY_NUM > 0
-		for (k = 0; k < Key_Channel; k++) {
-			iArrayIndex = y_len * x_len + k;
-			nvt_mp_seq_printf(m, "%5d, ", rawdata[iArrayIndex]);
-		}
-		nvt_mp_seq_printf(m, "\n");
 #endif /* #if TOUCH_KEY_NUM > 0 */
-		break;
+			break;
 	}
 	nvt_mp_seq_printf(m, "\n");
 }
 
 /*******************************************************
 Description:
-Novatek touchscreen self-test sequence print show
-function.
+	Novatek touchscreen self-test sequence print show
+	function.
 
 return:
-Executive outcomes. 0---succeed.
- *******************************************************/
+	Executive outcomes. 0---succeed.
+*******************************************************/
 static int32_t c_show_selftest(struct seq_file *m, void *v)
 {
 	NVT_LOG("++\n");
-
+/*
 	nvt_mp_seq_printf(m, "FW Version: %d\n\n", ts->fw_ver);
 
 	nvt_mp_seq_printf(m, "Short Test");
 	if ((TestResult_Short == 0) || (TestResult_Short == 1)) {
 		print_selftest_result(m, TestResult_Short, RecordResult_Short, RawData_Short, X_Channel, Y_Channel);
-	} else {
+	} else { // TestResult_Short is -1
 		if (ts->carrier_system) {
 			nvt_mp_seq_printf(m, " FAIL!\n");
 			if (TestResult_Short_Diff == -1) {
@@ -1215,8 +1218,8 @@ static int32_t c_show_selftest(struct seq_file *m, void *v)
 
 	nvt_mp_seq_printf(m, "FW Rawdata Test");
 	if ((TestResult_FW_Rawdata == 0) || (TestResult_FW_Rawdata == 1)) {
-		print_selftest_result(m, TestResult_FWMutual, RecordResult_FWMutual, RawData_FWMutual, X_Channel, Y_Channel);
-	} else {
+		 print_selftest_result(m, TestResult_FWMutual, RecordResult_FWMutual, RawData_FWMutual, X_Channel, Y_Channel);
+	} else { // TestResult_FW_Rawdata is -1
 		nvt_mp_seq_printf(m, " FAIL!\n");
 		if (TestResult_FWMutual == -1) {
 			nvt_mp_seq_printf(m, "FW Mutual");
@@ -1242,7 +1245,7 @@ static int32_t c_show_selftest(struct seq_file *m, void *v)
 	nvt_mp_seq_printf(m, "Noise Test");
 	if ((TestResult_Noise == 0) || (TestResult_Noise == 1)) {
 		print_selftest_result(m, TestResult_FW_DiffMax, RecordResult_FW_DiffMax, RawData_Diff_Max, X_Channel, Y_Channel);
-	} else {
+	} else { // TestResult_Noise is -1
 		nvt_mp_seq_printf(m, " FAIL!\n");
 
 		if (TestResult_FW_DiffMax == -1) {
@@ -1254,18 +1257,18 @@ static int32_t c_show_selftest(struct seq_file *m, void *v)
 			print_selftest_result(m, TestResult_FW_DiffMin, RecordResult_FW_DiffMin, RawData_Diff_Min, X_Channel, Y_Channel);
 		}
 	}
-
+*/
 	/*Longcheer add for TP by sunwujian 2018/06/15 start*/
 
-	NVT_LOG("++TestResult_FWMutual = %d \n", TestResult_FWMutual);
-	NVT_LOG("++TestResult_FW_CC = %d \n", TestResult_FW_CC);
-	NVT_LOG("++TestResult_Noise = %d \n", TestResult_Noise);
-	NVT_LOG("++TestResult_Short = %d \n", TestResult_Short);
-	NVT_LOG("++TestResult_Open = %d \n", TestResult_Open);
-
+	NVT_LOG("++TestResult_FWMutual = %d \n",TestResult_FWMutual);
+	NVT_LOG("++TestResult_FW_CC = %d \n",TestResult_FW_CC);
+	NVT_LOG("++TestResult_Noise = %d \n",TestResult_Noise);
+	NVT_LOG("++TestResult_Short = %d \n",TestResult_Short);
+	NVT_LOG("++TestResult_Open = %d \n",TestResult_Open);
+	
 	if ((TestResult_FWMutual == 0)&& (TestResult_FW_CC == 0) && (TestResult_Noise == 0)&& (TestResult_Short ==0) && (TestResult_Open == 0)){
 		nvt_mp_seq_printf(m, "Pass\n");
-	}
+	} 
 	else {
 		nvt_mp_seq_printf(m, "Fail\n");
 	}
@@ -1274,19 +1277,19 @@ static int32_t c_show_selftest(struct seq_file *m, void *v)
 
 	NVT_LOG("--\n");
 
-	return 0;
+    return 0;
 }
 
 /*******************************************************
 Description:
-Novatek touchscreen self-test sequence print start
-function.
+	Novatek touchscreen self-test sequence print start
+	function.
 
 return:
-Executive outcomes. 1---call next function.
-NULL---not call next function and sequence loop
-stop.
- *******************************************************/
+	Executive outcomes. 1---call next function.
+	NULL---not call next function and sequence loop
+	stop.
+*******************************************************/
 static void *c_start(struct seq_file *m, loff_t *pos)
 {
 	return *pos < 1 ? (void *)1 : NULL;
@@ -1294,13 +1297,13 @@ static void *c_start(struct seq_file *m, loff_t *pos)
 
 /*******************************************************
 Description:
-Novatek touchscreen self-test sequence print next
-function.
+	Novatek touchscreen self-test sequence print next
+	function.
 
 return:
-Executive outcomes. NULL---no next and call sequence
-stop function.
- *******************************************************/
+	Executive outcomes. NULL---no next and call sequence
+	stop function.
+*******************************************************/
 static void *c_next(struct seq_file *m, void *v, loff_t *pos)
 {
 	++*pos;
@@ -1309,12 +1312,12 @@ static void *c_next(struct seq_file *m, void *v, loff_t *pos)
 
 /*******************************************************
 Description:
-Novatek touchscreen self-test sequence print stop
-function.
+	Novatek touchscreen self-test sequence print stop
+	function.
 
 return:
-n.a.
- *******************************************************/
+	n.a.
+*******************************************************/
 static void c_stop(struct seq_file *m, void *v)
 {
 	return;
@@ -1329,11 +1332,41 @@ const struct seq_operations nvt_selftest_seq_ops = {
 
 /*******************************************************
 Description:
-Novatek touchscreen /proc/nvt_selftest open function.
+	Novatek touchscreen /proc/nvt_test_result read function.
 
 return:
-Executive outcomes. 0---succeed. negative---failed.
- *******************************************************/
+	Executive outcomes. cnt.
+*******************************************************/
+static ssize_t nvt_test_result_read(struct file *file,char __user *buf, size_t size,loff_t *ppos)
+{
+	int cnt = 0;
+	char *page = NULL;
+	
+	page = kzalloc(16, GFP_KERNEL);
+	NVT_LOG("test_result have %d err",test_result);
+
+	if(test_result == 0)
+	{
+		cnt = sprintf(page,"PASS\n");
+	}
+	else
+	{
+		cnt = sprintf(page,"FAIL\n");
+		test_result = 0;
+	}
+	cnt = simple_read_from_buffer(buf,size,ppos,page,cnt);
+	kfree(page);
+	return cnt;
+}
+
+
+/*******************************************************
+Description:
+	Novatek touchscreen /proc/nvt_selftest open function.
+
+return:
+	Executive outcomes. 0---succeed. negative---failed.
+*******************************************************/
 static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 {
 	struct device_node *np = ts->client->dev.of_node;
@@ -1421,7 +1454,7 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 		TestResult_FWMutual = 1;
 	} else {
 		TestResult_FWMutual = RawDataTest_SinglePoint_Sub(RawData_FWMutual, RecordResult_FWMutual, X_Channel, Y_Channel,
-				PS_Config_Lmt_FW_Rawdata_P, PS_Config_Lmt_FW_Rawdata_N);
+												PS_Config_Lmt_FW_Rawdata_P, PS_Config_Lmt_FW_Rawdata_N);
 	}
 	if (nvt_read_CC(RawData_FW_CC) != 0) {
 		TestResult_FW_CC = 1;
@@ -1432,16 +1465,16 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 	} else {
 		if (ts->carrier_system) {
 			TestResult_FW_CC_I = RawDataTest_SinglePoint_Sub(RawData_FW_CC_I, RecordResult_FW_CC_I, X_Channel, Y_Channel,
-					PS_Config_Lmt_FW_CC_I_P, PS_Config_Lmt_FW_CC_I_N);
+												PS_Config_Lmt_FW_CC_I_P, PS_Config_Lmt_FW_CC_I_N);
 			TestResult_FW_CC_Q = RawDataTest_SinglePoint_Sub(RawData_FW_CC_Q, RecordResult_FW_CC_Q, X_Channel, Y_Channel,
-					PS_Config_Lmt_FW_CC_Q_P, PS_Config_Lmt_FW_CC_Q_N);
+												PS_Config_Lmt_FW_CC_Q_P, PS_Config_Lmt_FW_CC_Q_N);
 			if ((TestResult_FW_CC_I == -1) || (TestResult_FW_CC_Q == -1))
 				TestResult_FW_CC = -1;
 			else
 				TestResult_FW_CC = 0;
 		} else {
 			TestResult_FW_CC = RawDataTest_SinglePoint_Sub(RawData_FW_CC, RecordResult_FW_CC, X_Channel, Y_Channel,
-					PS_Config_Lmt_FW_CC_P, PS_Config_Lmt_FW_CC_N);
+												PS_Config_Lmt_FW_CC_P, PS_Config_Lmt_FW_CC_N);
 		}
 	}
 
@@ -1464,14 +1497,14 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 		TestResult_FW_DiffMin = 1;
 	} else {
 		TestResult_FW_DiffMax = RawDataTest_SinglePoint_Sub(RawData_Diff_Max, RecordResult_FW_DiffMax, X_Channel, Y_Channel,
-				PS_Config_Lmt_FW_Diff_P, PS_Config_Lmt_FW_Diff_N);
+											PS_Config_Lmt_FW_Diff_P, PS_Config_Lmt_FW_Diff_N);
 
 
 		if (ts->carrier_system) {
 			TestResult_FW_DiffMin = 0;
 		} else {
 			TestResult_FW_DiffMin = RawDataTest_SinglePoint_Sub(RawData_Diff_Min, RecordResult_FW_DiffMin, X_Channel, Y_Channel,
-					PS_Config_Lmt_FW_Diff_P, PS_Config_Lmt_FW_Diff_N);
+												PS_Config_Lmt_FW_Diff_P, PS_Config_Lmt_FW_Diff_N);
 		}
 
 		if ((TestResult_FW_DiffMax == -1) || (TestResult_FW_DiffMin == -1))
@@ -1481,7 +1514,7 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 	}
 
 
-	if (nvt_read_fw_short(RawData_Short) != 0) {
+	if (nvt_read_fw_short(RawData_Short,1) != 0) {
 		TestResult_Short = 1;
 		if (ts->carrier_system) {
 			TestResult_Short_Diff = 1;
@@ -1491,9 +1524,9 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 
 		if (ts->carrier_system) {
 			TestResult_Short_Diff = RawDataTest_SinglePoint_Sub(RawData_Short_Diff, RecordResult_Short_Diff, X_Channel, Y_Channel,
-					PS_Config_Lmt_Short_Diff_P, PS_Config_Lmt_Short_Diff_N);
+											PS_Config_Lmt_Short_Diff_P, PS_Config_Lmt_Short_Diff_N);
 			TestResult_Short_Base = RawDataTest_SinglePoint_Sub(RawData_Short_Base, RecordResult_Short_Base, X_Channel, Y_Channel,
-					PS_Config_Lmt_Short_Base_P, PS_Config_Lmt_Short_Base_N);
+											PS_Config_Lmt_Short_Base_P, PS_Config_Lmt_Short_Base_N);
 
 			if ((TestResult_Short_Diff == -1) || (TestResult_Short_Base == -1))
 				TestResult_Short = -1;
@@ -1501,17 +1534,17 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 				TestResult_Short = 0;
 		} else {
 			TestResult_Short = RawDataTest_SinglePoint_Sub(RawData_Short, RecordResult_Short, X_Channel, Y_Channel,
-					PS_Config_Lmt_Short_Rawdata_P, PS_Config_Lmt_Short_Rawdata_N);
+											PS_Config_Lmt_Short_Rawdata_P, PS_Config_Lmt_Short_Rawdata_N);
 		}
 	}
 
 
-	if (nvt_read_fw_open(RawData_Open) != 0) {
+	if (nvt_read_fw_open(RawData_Open,1) != 0) {
 		TestResult_Open = 1;
 	} else {
 
 		TestResult_Open = RawDataTest_SinglePoint_Sub(RawData_Open, RecordResult_Open, X_Channel, Y_Channel,
-				PS_Config_Lmt_Open_Rawdata_P, PS_Config_Lmt_Open_Rawdata_N);
+											PS_Config_Lmt_Open_Rawdata_P, PS_Config_Lmt_Open_Rawdata_N);
 	}
 
 
@@ -1526,6 +1559,11 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 	return seq_open(file, &nvt_selftest_seq_ops);
 }
 
+static const struct file_operations nvt_test_result_fops = {
+	.owner = THIS_MODULE,
+	.read = nvt_test_result_read,
+};
+
 static const struct file_operations nvt_selftest_fops = {
 	.owner = THIS_MODULE,
 	.open = nvt_selftest_open,
@@ -1537,11 +1575,11 @@ static const struct file_operations nvt_selftest_fops = {
 #ifdef CONFIG_OF
 /*******************************************************
 Description:
-Novatek touchscreen parse AIN setting for array type.
+	Novatek touchscreen parse AIN setting for array type.
 
 return:
-n.a.
- *******************************************************/
+	n.a.
+*******************************************************/
 void nvt_mp_parse_ain(struct device_node *np, const char *name, uint8_t *array, int32_t size)
 {
 	struct property *data;
@@ -1576,11 +1614,11 @@ void nvt_mp_parse_ain(struct device_node *np, const char *name, uint8_t *array, 
 
 /*******************************************************
 Description:
-Novatek touchscreen parse criterion for u32 type.
+	Novatek touchscreen parse criterion for u32 type.
 
 return:
-n.a.
- *******************************************************/
+	n.a.
+*******************************************************/
 void nvt_mp_parse_u32(struct device_node *np, const char *name, int32_t *para)
 {
 	int32_t ret;
@@ -1597,11 +1635,11 @@ void nvt_mp_parse_u32(struct device_node *np, const char *name, int32_t *para)
 
 /*******************************************************
 Description:
-Novatek touchscreen parse criterion for array type.
+	Novatek touchscreen parse criterion for array type.
 
 return:
-n.a.
- *******************************************************/
+	n.a.
+*******************************************************/
 void nvt_mp_parse_array(struct device_node *np, const char *name, int32_t *array,
 		int32_t size)
 {
@@ -1647,11 +1685,11 @@ void nvt_mp_parse_array(struct device_node *np, const char *name, int32_t *array
 
 /*******************************************************
 Description:
-Novatek touchscreen parse device tree mp function.
+	Novatek touchscreen parse device tree mp function.
 
 return:
-n.a.
- *******************************************************/
+	n.a.
+*******************************************************/
 void nvt_mp_parse_dt(struct device_node *root, const char *node_compatible)
 {
 	struct device_node *np = root;
@@ -1761,12 +1799,12 @@ void nvt_mp_parse_dt(struct device_node *root, const char *node_compatible)
 
 /*******************************************************
 Description:
-Novatek touchscreen MP function proc. file node
-initial function.
+	Novatek touchscreen MP function proc. file node
+	initial function.
 
 return:
-Executive outcomes. 0---succeed. -1---failed.
- *******************************************************/
+	Executive outcomes. 0---succeed. -1---failed.
+*******************************************************/
 int32_t nvt_mp_proc_init(void)
 {
 	NVT_proc_selftest_entry = proc_create("nvt_selftest", 0444, NULL, &nvt_selftest_fops);
