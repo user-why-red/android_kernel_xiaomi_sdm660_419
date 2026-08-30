@@ -2,7 +2,7 @@
 # Novatek NT36xxx touchscreen driver configuration
 #
 
-config TOUCHSCREEN_NVT_F7A
+config TOUCHSCREEN_NVT_A
 	tristate "Novatek NT36xxx"
 	help
 	  Say Y here if you have a Novatek NT36xxx touchscreen connected

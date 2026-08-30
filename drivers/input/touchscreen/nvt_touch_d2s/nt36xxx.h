@@ -2,8 +2,8 @@
  * Copyright (C) 2010 - 2017 Novatek, Inc.
  * Copyright (C) 2019 XiaoMi, Inc.
  *
- * $Revision: 22429 $
- * $Date: 2018-01-30 19:42:59 +0800 (周二, 30 一月 2018) $
+ * $Revision: 14061 $
+ * $Date: 2017-07-06 15:45:15 +0800 (周四, 06 七月 2017) $
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,13 +26,10 @@
 #include <linux/earlysuspend.h>
 #endif
 
-#include "nt36xxx_mem_map.h"
-
 #define NVT_DEBUG 0
 
 
-#define NVTTOUCH_RST_PIN 66
-#define NVTTOUCH_INT_PIN 67
+#define NVTTOUCH_INT_PIN 943
 
 
 
@@ -60,16 +57,13 @@
 
 
 #define TOUCH_DEFAULT_MAX_WIDTH 1080
-#define TOUCH_DEFAULT_MAX_HEIGHT 2340
+#define TOUCH_DEFAULT_MAX_HEIGHT 2160
 #define TOUCH_MAX_FINGER_NUM 10
 #define TOUCH_KEY_NUM 0
 #if TOUCH_KEY_NUM > 0
 extern const uint16_t touch_key_array[TOUCH_KEY_NUM];
 #endif
 #define TOUCH_FORCE_NUM 1000
-
-/* Enable only when module have tp reset pin and connected to host */
-#define NVT_TOUCH_SUPPORT_HW_RST 0
 
 
 #define NVT_TOUCH_PROC 0
@@ -81,23 +75,40 @@ extern const uint16_t touch_key_array[TOUCH_KEY_NUM];
 extern const uint16_t gesture_key_array[];
 #endif
 #define BOOT_UPDATE_FIRMWARE 0
-/* add by yangjiangzhu compatible to shenchao and tianma TP FW  2018/3/16  start */
-#define BOOT_UPDATE_FIRMWARE_NAME_TIANMA "novatek/tianma_nt36672a_miui_f7a.bin"
-#define BOOT_UPDATE_FIRMWARE_NAME_TIANMA_GG5 "novatek/tianma_nt36672a_miui_f7a.bin"
-#define BOOT_UPDATE_FIRMWARE_NAME_SHENCHAO "novatek/shenchao_nt36672a_miui_f7a.bin"
-/* add by yangjiangzhu compatible to shenchao and tianma TP FW  2018/3/16  end */
-
+#define BOOT_UPDATE_FIRMWARE_NAME_TIANMA "novatek/tianma_nt36672_miui_d2s.bin"
+#define BOOT_UPDATE_FIRMWARE_NAME_JDI "novatek/jdi_nt36672_miui_d2s.bin"
 
 
 #define NVT_TOUCH_ESD_PROTECT 1
 #define NVT_TOUCH_ESD_CHECK_PERIOD 1500	/* ms */
 
-
-#define TOUCH_STATE_WORKING    0x00
-#define TOUCH_STATE_UPGRADING  0x01
+struct nvt_ts_mem_map {
+	uint32_t EVENT_BUF_ADDR;
+	uint32_t RAW_PIPE0_ADDR;
+	uint32_t RAW_PIPE0_Q_ADDR;
+	uint32_t RAW_PIPE1_ADDR;
+	uint32_t RAW_PIPE1_Q_ADDR;
+	uint32_t BASELINE_ADDR;
+	uint32_t BASELINE_Q_ADDR;
+	uint32_t BASELINE_BTN_ADDR;
+	uint32_t BASELINE_BTN_Q_ADDR;
+	uint32_t DIFF_PIPE0_ADDR;
+	uint32_t DIFF_PIPE0_Q_ADDR;
+	uint32_t DIFF_PIPE1_ADDR;
+	uint32_t DIFF_PIPE1_Q_ADDR;
+	uint32_t RAW_BTN_PIPE0_ADDR;
+	uint32_t RAW_BTN_PIPE0_Q_ADDR;
+	uint32_t RAW_BTN_PIPE1_ADDR;
+	uint32_t RAW_BTN_PIPE1_Q_ADDR;
+	uint32_t DIFF_BTN_PIPE0_ADDR;
+	uint32_t DIFF_BTN_PIPE0_Q_ADDR;
+	uint32_t DIFF_BTN_PIPE1_ADDR;
+	uint32_t DIFF_BTN_PIPE1_Q_ADDR;
+	uint32_t READ_FLASH_CHECKSUM_ADDR;
+	uint32_t RW_FLASH_DATA_ADDR;
+};
 
 struct nvt_ts_data {
-	uint8_t touch_state;
 	struct i2c_client *client;
 	struct input_dev *input_dev;
 	struct work_struct nvt_work;
@@ -123,7 +134,6 @@ struct nvt_ts_data {
 	int32_t reset_gpio;
 	uint32_t reset_flags;
 	struct mutex lock;
-	struct mutex pm_mutex;
 	const struct nvt_ts_mem_map *mmap;
 	uint8_t carrier_system;
 	uint16_t nvt_pid;
@@ -168,6 +178,5 @@ extern int32_t nvt_check_fw_status(void);
 #if NVT_TOUCH_ESD_PROTECT
 extern void nvt_esd_check_enable(uint8_t enable);
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
-extern void nvt_stop_crc_reboot(void);
 
 #endif /* _LINUX_NVT_TOUCH_H */
