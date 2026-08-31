@@ -800,7 +800,8 @@ static int match(const char *sym, const char * const pat[])
 
 		/* "*foo*" */
 		if (*p == '*' && *endp == '*') {
-			char *here, *bare = strndup(p + 1, strlen(p) - 2);
+			const char *here;
+			char *bare = strndup(p + 1, strlen(p) - 2);
 
 			here = strstr(sym, bare);
 			free(bare);
