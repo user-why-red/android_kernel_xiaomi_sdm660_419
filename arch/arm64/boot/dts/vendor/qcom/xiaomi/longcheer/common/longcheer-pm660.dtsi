@@ -84,10 +84,37 @@
 
 /* common diff with msm-pm660l.dtsi */
 &pm660l_wled {
-	/delete-property/ qcom,auto-calibration;
-	qcom,fs-current-limit = <18000>;
+	compatible = "qcom,qpnp-wled";
+	reg = <0xd800 0x100>,
+	      <0xd900 0x100>;
+	reg-names = "qpnp-wled-ctrl-base",
+		    "qpnp-wled-sink-base";
+	interrupts = <0x3 0xd8 0x1 IRQ_TYPE_EDGE_RISING>;
+	interrupt-names = "ovp-irq";
+	linux,name = "wled";
+	linux,default-trigger = "bkl-trigger";
+	qcom,fdbk-output = "auto";
+	qcom,vref-uv = <127500>;
+	qcom,switch-freq-khz = <800>;
+	qcom,ovp-mv = <29600>;
+	qcom,ilim-ma = <970>;
+	qcom,boost-duty-ns = <26>;
+	qcom,mod-freq-khz = <9600>;
+	qcom,dim-mode = "hybrid";
+	qcom,hyb-thres = <625>;
+	qcom,sync-dly-us = <800>;
+	qcom,fs-curr-ua = <20000>;
+	qcom,cons-sync-write-delay-us = <1000>;
+	qcom,led-strings-list = [00 01];
 	qcom,en-cabc;
-	qcom,string-cfg = <3>;
+	qcom,loop-auto-gm-en;
+	qcom,pmic-revid = <&pm660l_revid>;
+	qcom,auto-calibration-enable;
+	status = "ok";
+	/delete-property/ qcom,string-cfg;
+	/delete-property/ qcom,sync-dly;
+	/delete-property/ qcom,auto-calibration;
+	/delete-property/ qcom,fs-current-limit;
 };
 
 &pm660l_flash0 {

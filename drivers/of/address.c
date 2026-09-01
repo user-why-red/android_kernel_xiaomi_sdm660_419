@@ -729,6 +729,22 @@ const __be32 *of_get_address(struct device_node *dev, int index, u64 *size,
 }
 EXPORT_SYMBOL(of_get_address);
 
+const __be32 *of_get_address_by_name(struct device_node *dev, const char *name,
+		u64 *size, unsigned int *flags)
+{
+	int index;
+	if (!name)
+		return NULL;
+
+	/* Try to read "reg-names" property and get the index by name */
+	index = of_property_match_string(dev, "reg-names", name);
+	if (index < 0)
+		return NULL;
+
+	return of_get_address(dev, index, size, flags);
+}
+EXPORT_SYMBOL(of_get_address_by_name);
+
 static u64 of_translate_ioport(struct device_node *dev, const __be32 *in_addr,
 			u64 size)
 {
