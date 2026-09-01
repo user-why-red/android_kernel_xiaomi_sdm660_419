@@ -365,7 +365,6 @@ void f2fs_del_fsync_node_entry(struct f2fs_sb_info *sbi, struct page *page)
 		}
 	}
 	spin_unlock_irqrestore(&sbi->fsync_node_lock, flags);
-	f2fs_bug_on(sbi, 1);
 }
 
 void f2fs_reset_fsync_node_info(struct f2fs_sb_info *sbi)
