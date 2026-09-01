@@ -91,7 +91,7 @@
 		    "qpnp-wled-sink-base";
 	interrupts = <0x3 0xd8 0x1 IRQ_TYPE_EDGE_RISING>;
 	interrupt-names = "ovp-irq";
-	linux,name = "wled";
+	linux,name = "lcd-backlight";
 	linux,default-trigger = "bkl-trigger";
 	qcom,fdbk-output = "auto";
 	qcom,vref-uv = <127500>;
