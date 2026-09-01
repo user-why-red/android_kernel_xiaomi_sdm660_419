@@ -1292,6 +1292,17 @@ static int selinux_genfs_get_sid(struct dentry *dentry,
 				path++;
 			}
 		}
+		if (!strcmp(sb->s_type->name, "sysfs") &&
+		    (strstr(path, "leds/wled") ||
+		     strstr(path, "leds/lcd-backlight") ||
+		     strstr(path, "/class/leds/"))) {
+			rc = security_context_to_sid(&selinux_state,
+				"u:object_r:sysfs_leds:s0",
+				sizeof("u:object_r:sysfs_leds:s0") - 1,
+				sid, GFP_ATOMIC);
+			if (!rc)
+				goto out;
+		}
 		rc = security_genfs_sid(&selinux_state, sb->s_type->name,
 					path, tclass, sid);
 		if (rc == -ENOENT) {
@@ -1300,6 +1311,7 @@ static int selinux_genfs_get_sid(struct dentry *dentry,
 			rc = 0;
 		}
 	}
+out:
 	free_page((unsigned long)buffer);
 	return rc;
 }
