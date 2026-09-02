@@ -18,8 +18,6 @@
 #include <linux/platform_device.h>
 #include <linux/platform_data/asoc-ux500-msp.h>
 
-#define MSP_INPUT_FREQ_APB 48000000
-
 /*** Stereo mode. Used for APB data accesses as 16 bits accesses (mono),
  *   32 bits accesses (stereo).
  ***/
