@@ -1302,6 +1302,10 @@ static int selinux_genfs_get_sid(struct dentry *dentry,
 				sid, GFP_ATOMIC);
 			if (!rc)
 				goto out;
+			if (!selinux_state.initialized) {
+				rc = -EAGAIN;
+				goto out;
+			}
 		}
 		rc = security_genfs_sid(&selinux_state, sb->s_type->name,
 					path, tclass, sid);
