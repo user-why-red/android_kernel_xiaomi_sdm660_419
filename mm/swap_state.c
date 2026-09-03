@@ -140,7 +140,7 @@ int __add_to_swap_cache(struct page *page, swp_entry_t entry, void **shadowp)
 
 		item = radix_tree_deref_slot_protected(slot,
 				&address_space->i_pages.xa_lock);
-		if (WARN_ON_ONCE(item && !radix_tree_exceptional_entry(item))) {
+		if (WARN_ON_ONCE(item && !xa_is_value(item))) {
 			error = -EEXIST;
 			break;
 		}
@@ -204,7 +204,7 @@ void __delete_from_swap_cache(struct page *page, void *shadow)
 	VM_BUG_ON_PAGE(!PageLocked(page), page);
 	VM_BUG_ON_PAGE(!PageSwapCache(page), page);
 	VM_BUG_ON_PAGE(PageWriteback(page), page);
-	VM_BUG_ON(shadow && !radix_tree_exceptional_entry(shadow));
+	VM_BUG_ON(shadow && !xa_is_value(shadow));
 
 	entry.val = page_private(page);
 	address_space = swap_address_space(entry);
@@ -326,7 +326,7 @@ void clear_shadow_from_swap_cache(int type, unsigned long begin,
 					 &iter, curr) {
 			item = radix_tree_deref_slot_protected(slot,
 					&address_space->i_pages.xa_lock);
-			if (radix_tree_exceptional_entry(item))
+			if (xa_is_value(item))
 				radix_tree_iter_delete(&address_space->i_pages,
 						       &iter, slot);
 			if (iter.next_index > end)
