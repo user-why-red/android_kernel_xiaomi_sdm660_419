@@ -1,4 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0-only
-ccflags-y += -Idrivers/media/video/msm
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-oss/common
+ccflags-y += -I$(srctree)/drivers/media/video/msm
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-oss/common
 obj-$(CONFIG_MSM_JPEGDMA) += msm_jpeg_dma_dev.o msm_jpeg_dma_hw.o
