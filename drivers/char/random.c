@@ -757,7 +757,7 @@ void __init random_init(void)
 
 	/* Reseed if already seeded by earlier phases. */
 	if (crng_ready())
-		crng_reseed();
+		crng_reseed(NULL);
 
 	WARN(!entropy, "Missing cycle counter and fallback timer; RNG "
 		       "entropy collection will consequently suffer.");
