@@ -1,14 +1,14 @@
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy/sensor
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy/codecs
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy/isps
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy/pproc
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy/msm_vb2
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy/camera
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy/jpeg_10
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy/jpeg_dma
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy/fd
-ccflags-y += -Idrivers/media/platform/msm/camera_v2-legacy/common
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy/sensor
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy/codecs
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy/isps
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy/pproc
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy/msm_vb2
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy/camera
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy/jpeg_10
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy/jpeg_dma
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy/fd
+ccflags-y += -I$(srctree)/drivers/media/platform/msm/camera_v2-legacy/common
 
 obj-$(CONFIG_MSMB_CAMERA) += common/
 obj-$(CONFIG_MSMB_CAMERA) += msm.o
