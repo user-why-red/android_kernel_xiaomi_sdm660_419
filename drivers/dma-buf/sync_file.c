@@ -139,18 +139,13 @@ EXPORT_SYMBOL(sync_file_get_fence);
  */
 char *sync_file_get_name(struct sync_file *sync_file, char *buf, int len)
 {
-	if (sync_file->user_name[0]) {
-		strlcpy(buf, sync_file->user_name, len);
-	} else {
-		struct dma_fence *fence = sync_file->fence;
+	struct dma_fence *fence = sync_file->fence;
 
-		snprintf(buf, len, "%s-%s%llu-%lld",
-			 fence->ops->get_driver_name(fence),
-			 fence->ops->get_timeline_name(fence),
-			 fence->context,
-			 fence->seqno);
-	}
-
+	snprintf(buf, len, "%s-%s%llu-%lld",
+		 fence->ops->get_driver_name(fence),
+		 fence->ops->get_timeline_name(fence),
+		 fence->context,
+		 fence->seqno);
 	return buf;
 }
 
@@ -290,7 +285,6 @@ static struct sync_file *sync_file_merge(const char *name, struct sync_file *a,
 	if (sync_file_set_fence(sync_file, fences, i) < 0)
 		goto err;
 
-	strlcpy(sync_file->user_name, name, sizeof(sync_file->user_name));
 	return sync_file;
 
 err:
