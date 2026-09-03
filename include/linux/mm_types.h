@@ -415,6 +415,7 @@ struct mm_struct {
 					     * counters
 					     */
 		struct rw_semaphore mmap_lock;
+#define mmap_sem mmap_lock
 
 		struct list_head mmlist; /* List of maybe swapped mm's.	These
 					  * are globally strung together off

@@ -54,7 +54,7 @@ static inline void mmap_read_unlock(struct mm_struct *mm)
 static inline bool mmap_read_trylock_non_owner(struct mm_struct *mm)
 {
 	if (down_read_trylock(&mm->mmap_lock)) {
-		rwsem_release(&mm->mmap_lock.dep_map, _RET_IP_);
+		rwsem_release(&mm->mmap_lock.dep_map, 1, _RET_IP_);
 		return true;
 	}
 	return false;
