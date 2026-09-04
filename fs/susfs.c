@@ -21,17 +21,26 @@ static spinlock_t susfs_spin_lock;
 
 extern bool susfs_is_current_ksu_domain(void);
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-extern void ksu_try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid);
+extern void try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid);
 #endif
+extern bool susfs_is_avc_log_spoofing_enabled;
 
 #ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
 bool susfs_is_log_enabled __read_mostly = true;
 #define SUSFS_LOGI(fmt, ...) if (susfs_is_log_enabled) pr_info("susfs:[%u][%d][%s] " fmt, current_uid().val, current->pid, __func__, ##__VA_ARGS__)
 #define SUSFS_LOGE(fmt, ...) if (susfs_is_log_enabled) pr_err("susfs:[%u][%d][%s]" fmt, current_uid().val, current->pid, __func__, ##__VA_ARGS__)
 #else
-#define SUSFS_LOGI(fmt, ...) 
-#define SUSFS_LOGE(fmt, ...) 
+#define SUSFS_LOGI(fmt, ...)
+#define SUSFS_LOGE(fmt, ...)
 #endif
+
+bool susfs_starts_with(const char *str, const char *prefix) {
+    while (*prefix) {
+        if (*str++ != *prefix++)
+            return false;
+    }
+    return true;
+}
 
 /* sus_path */
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
@@ -82,7 +91,7 @@ int susfs_set_i_state_on_external_dir(char __user* user_info, int cmd) {
 		err = -EINVAL;
 		goto out_path_put_path;
 	}
-	
+
 	if (cmd == CMD_SUSFS_SET_ANDROID_DATA_ROOT_PATH) {
 		spin_lock(&inode->i_lock);
 		set_bit(AS_FLAGS_ANDROID_DATA_ROOT_DIR, &inode->i_mapping->flags);
@@ -126,7 +135,7 @@ int susfs_add_sus_path(struct st_susfs_sus_path* __user user_info) {
 		return err;
 	}
 
-		err = kern_path(info.target_pathname, 0, &path);
+	err = kern_path(info.target_pathname, LOOKUP_FOLLOW, &path);
 	if (err) {
 		SUSFS_LOGE("Failed opening file '%s'\n", info.target_pathname);
 		return err;
@@ -340,16 +349,16 @@ void susfs_run_sus_path_loop(uid_t uid) {
 }
 
 static inline bool is_i_uid_in_android_data_not_allowed(uid_t i_uid) {
-	return (likely(susfs_is_current_non_root_user_app_proc()) &&
+	return (likely(susfs_is_current_proc_umounted()) &&
 		unlikely(current_uid().val != i_uid));
 }
 
 static inline bool is_i_uid_in_sdcard_not_allowed(void) {
-	return (likely(susfs_is_current_non_root_user_app_proc()));
+	return (likely(susfs_is_current_proc_umounted()));
 }
 
 static inline bool is_i_uid_not_allowed(uid_t i_uid) {
-	return (likely(susfs_is_current_non_root_user_app_proc()) &&
+	return (likely(susfs_is_current_proc_umounted()) &&
 		unlikely(current_uid().val != i_uid));
 }
 
@@ -442,7 +451,7 @@ static void susfs_update_sus_mount_inode(char *target_pathname) {
 	struct inode *inode = NULL;
 	int err = 0;
 
-	err = kern_path(target_pathname, LOOKUP_FOLLOW, &p);
+	err = kern_path(target_pathname, 0, &p);
 	if (err) {
 		SUSFS_LOGE("Failed opening file '%s'\n", target_pathname);
 		return;
@@ -455,7 +464,7 @@ static void susfs_update_sus_mount_inode(char *target_pathname) {
 	 */
 	mnt = real_mount(p.mnt);
 	if (mnt->mnt_group_id > 0 && // 0 means no peer group
-		mnt->mnt_group_id < DEFAULT_SUS_MNT_GROUP_ID) {
+		mnt->mnt_group_id < DEFAULT_KSU_MNT_GROUP_ID) {
 		SUSFS_LOGE("skip setting SUS_MOUNT inode state for path '%s' since its source mount has a legit peer group id\n", target_pathname);
 		return;
 	}
@@ -532,7 +541,7 @@ int susfs_auto_add_sus_bind_mount(const char *pathname, struct path *path_target
 
 	mnt = real_mount(path_target->mnt);
 	if (mnt->mnt_group_id > 0 && // 0 means no peer group
-		mnt->mnt_group_id < DEFAULT_SUS_MNT_GROUP_ID) {
+		mnt->mnt_group_id < DEFAULT_KSU_MNT_GROUP_ID) {
 		SUSFS_LOGE("skip setting SUS_MOUNT inode state for path '%s' since its source mount has a legit peer group id\n", pathname);
 		// return 0 here as we still want it to be added to try_umount list
 		return 0;
@@ -605,7 +614,7 @@ static int susfs_update_sus_kstat_inode(char *target_pathname) {
 	struct inode *inode = NULL;
 	int err = 0;
 
-	err = kern_path(target_pathname,0, &p);
+	err = kern_path(target_pathname, LOOKUP_FOLLOW, &p);
 	if (err) {
 		SUSFS_LOGE("Failed opening file '%s'\n", target_pathname);
 		return 1;
@@ -849,9 +858,9 @@ void susfs_try_umount(uid_t target_uid) {
 	// We should umount in reversed order
 	list_for_each_entry_reverse(cursor, &LH_TRY_UMOUNT_PATH, list) {
 		if (cursor->info.mnt_mode == TRY_UMOUNT_DEFAULT) {
-			ksu_try_umount(cursor->info.target_pathname, false, 0, target_uid);
+			try_umount(cursor->info.target_pathname, false, 0, target_uid);
 		} else if (cursor->info.mnt_mode == TRY_UMOUNT_DETACH) {
-			ksu_try_umount(cursor->info.target_pathname, false, MNT_DETACH, target_uid);
+			try_umount(cursor->info.target_pathname, false, MNT_DETACH, target_uid);
 		} else {
 			SUSFS_LOGE("failed umounting '%s' for uid: %d, mnt_mode '%d' not supported\n",
 							cursor->info.target_pathname, target_uid, cursor->info.mnt_mode);
@@ -1106,7 +1115,7 @@ int susfs_add_open_redirect(struct st_susfs_open_redirect* __user user_info) {
 	hash_add(OPEN_REDIRECT_HLIST, &new_entry->node, info.target_ino);
 	if (update_hlist) {
 		SUSFS_LOGI("target_ino: '%lu', target_pathname: '%s', redirected_pathname: '%s', is successfully updated to OPEN_REDIRECT_HLIST\n",
-				new_entry->target_ino, new_entry->target_pathname, new_entry->redirected_pathname);	
+				new_entry->target_ino, new_entry->target_pathname, new_entry->redirected_pathname);
 	} else {
 		SUSFS_LOGI("target_ino: '%lu', target_pathname: '%s' redirected_pathname: '%s', is successfully added to OPEN_REDIRECT_HLIST\n",
 				new_entry->target_ino, new_entry->target_pathname, new_entry->redirected_pathname);
@@ -1127,66 +1136,6 @@ struct filename* susfs_get_redirected_path(unsigned long ino) {
 	return ERR_PTR(-ENOENT);
 }
 #endif // #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
-
-/* sus_su */
-#ifdef CONFIG_KSU_SUSFS_SUS_SU
-bool susfs_is_sus_su_hooks_enabled __read_mostly = false;
-static int susfs_sus_su_working_mode = 0;
-extern void ksu_susfs_enable_sus_su(void);
-extern void ksu_susfs_disable_sus_su(void);
-
-int susfs_get_sus_su_working_mode(void) {
-	return susfs_sus_su_working_mode;
-}
-
-int susfs_sus_su(struct st_sus_su* __user user_info) {
-	struct st_sus_su info;
-	int last_working_mode = susfs_sus_su_working_mode;
-
-	if (copy_from_user(&info, user_info, sizeof(struct st_sus_su))) {
-		SUSFS_LOGE("failed copying from userspace\n");
-		return 1;
-	}
-
-	if (info.mode == SUS_SU_WITH_HOOKS) {
-		if (last_working_mode == SUS_SU_WITH_HOOKS) {
-			SUSFS_LOGE("current sus_su mode is already %d\n", SUS_SU_WITH_HOOKS);
-			return 1;
-		}
-		if (last_working_mode != SUS_SU_DISABLED) {
-			SUSFS_LOGE("please make sure the current sus_su mode is %d first\n", SUS_SU_DISABLED);
-			return 2;
-		}
-		ksu_susfs_enable_sus_su();
-		susfs_sus_su_working_mode = SUS_SU_WITH_HOOKS;
-		susfs_is_sus_su_hooks_enabled = true;
-		SUSFS_LOGI("core kprobe hooks for ksu are disabled!\n");
-		SUSFS_LOGI("non-kprobe hook sus_su is enabled!\n");
-		SUSFS_LOGI("sus_su mode: %d\n", SUS_SU_WITH_HOOKS);
-		return 0;
-	} else if (info.mode == SUS_SU_DISABLED) {
-		if (last_working_mode == SUS_SU_DISABLED) {
-			SUSFS_LOGE("current sus_su mode is already %d\n", SUS_SU_DISABLED);
-			return 1;
-		}
-		susfs_is_sus_su_hooks_enabled = false;
-		ksu_susfs_disable_sus_su();
-		susfs_sus_su_working_mode = SUS_SU_DISABLED;
-		if (last_working_mode == SUS_SU_WITH_HOOKS) {
-			SUSFS_LOGI("core kprobe hooks for ksu are enabled!\n");
-			goto out;
-		}
-out:
-		if (copy_to_user(user_info, &info, sizeof(info)))
-			SUSFS_LOGE("copy_to_user() failed\n");
-		return 0;
-	} else if (info.mode == SUS_SU_WITH_OVERLAY) {
-		SUSFS_LOGE("sus_su mode %d is deprecated\n", SUS_SU_WITH_OVERLAY);
-		return 1;
-	}
-	return 1;
-}
-#endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
 
 static int copy_config_to_buf(const char *config_string, char *buf_ptr, size_t *copied_size, size_t bufsize) {
 	size_t tmp_size = strlen(config_string);
@@ -1271,6 +1220,11 @@ int susfs_get_enabled_features(char __user* buf, size_t bufsize) {
 	if (err) goto out_kfree_kbuf;
 	buf_ptr = kbuf + copied_size;
 #endif
+#ifdef CONFIG_KSU_SUSFS_SUS_SU
+	err = copy_config_to_buf("CONFIG_KSU_SUSFS_SUS_SU\n", buf_ptr, &copied_size, bufsize);
+	if (err) goto out_kfree_kbuf;
+	buf_ptr = kbuf + copied_size;
+#endif
 #ifdef CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT
 	err = copy_config_to_buf("CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT\n", buf_ptr, &copied_size, bufsize);
 	if (err) goto out_kfree_kbuf;
@@ -1280,6 +1234,14 @@ int susfs_get_enabled_features(char __user* buf, size_t bufsize) {
 out_kfree_kbuf:
 	kfree(kbuf);
 	return err;
+}
+
+/* susfs avc log spoofing */
+void susfs_set_avc_log_spoofing(bool enabled) {
+	spin_lock(&susfs_spin_lock);
+	susfs_is_avc_log_spoofing_enabled = enabled;
+	spin_unlock(&susfs_spin_lock);
+	SUSFS_LOGI("enabled: %d\n", enabled);
 }
 
 /* susfs_init */

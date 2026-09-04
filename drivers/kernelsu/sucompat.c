@@ -31,7 +31,7 @@
 static bool ksu_sucompat_non_kp __read_mostly = true;
 #endif
 
-extern void ksu_escape_to_root();
+extern void escape_to_root();
 
 static const char sh_path[] = "/system/bin/sh";
 static const char ksud_path[] = KSUD_PATH;
@@ -66,13 +66,13 @@ int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
 #endif
 
 #ifndef CONFIG_KSU_SUSFS_SUS_SU
- 	if (!ksu_is_allow_uid(current_uid().val)) {
- 		return 0;
- 	}
+	if (!ksu_is_allow_uid(current_uid().val)) {
+		return 0;
+	}
 #endif
 
 #ifdef CONFIG_KSU_SUSFS_SUS_SU
-	char path[sizeof(su)] = {0};
+	char path[sizeof(su) + 1] = {0};
 #else
 	char path[sizeof(su) + 1];
 	memset(path, 0, sizeof(path));
@@ -125,7 +125,7 @@ int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
 	}
 
 #ifdef CONFIG_KSU_SUSFS_SUS_SU
-	char path[sizeof(su)] = {0};
+	char path[sizeof(su) + 1] = {0};
 #else
 	char path[sizeof(su) + 1];
 	memset(path, 0, sizeof(path));
@@ -187,7 +187,7 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 	pr_info("do_execveat_common su found\n");
 	memcpy((void *)filename->name, ksud_path, sizeof(ksud_path));
 
-	ksu_escape_to_root();
+	escape_to_root();
 
 	return 0;
 }
@@ -197,7 +197,7 @@ int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
 			       int *__never_use_flags)
 {
 #ifdef CONFIG_KSU_SUSFS_SUS_SU
-	char path[sizeof(su)] = {0};
+	char path[sizeof(su) + 1] = {0};
 #else
 	char path[sizeof(su) + 1];
 #endif
@@ -211,7 +211,9 @@ int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
 	if (unlikely(!filename_user))
 		return 0;
 
+#ifndef CONFIG_KSU_SUSFS_SUS_SU
 	memset(path, 0, sizeof(path));
+#endif
 	ksu_strncpy_from_user_retry(path, *filename_user, sizeof(path));
 
 	if (likely(memcmp(path, su, sizeof(su))))
@@ -223,7 +225,7 @@ int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user,
 	pr_info("sys_execve su found\n");
 	*filename_user = ksud_user_path();
 
-	ksu_escape_to_root();
+	escape_to_root();
 
 	return 0;
 }
@@ -361,7 +363,8 @@ void ksu_sucompat_init()
 void ksu_sucompat_exit()
 {
 #ifdef CONFIG_KSU_KPROBES_HOOK
-	for (int i = 0; i < ARRAY_SIZE(su_kps); i++) {
+	int i;
+	for (i = 0; i < ARRAY_SIZE(su_kps); i++) {
 		destroy_kprobe(&su_kps[i]);
 	}
 #else

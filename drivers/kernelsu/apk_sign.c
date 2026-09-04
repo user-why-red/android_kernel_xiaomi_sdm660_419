@@ -5,14 +5,15 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/version.h>
+#ifdef CONFIG_KSU_DEBUG
 #include <linux/moduleparam.h>
+#endif
 #include <crypto/hash.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
 #include <crypto/sha2.h>
 #else
 #include <crypto/sha.h>
 #endif
-
 #include "apk_sign.h"
 #include "klog.h" // IWYU pragma: keep
 #include "kernel_compat.h"
@@ -314,80 +315,13 @@ static struct kernel_param_ops expected_size_ops = {
 module_param_cb(ksu_debug_manager_uid, &expected_size_ops,
 		&ksu_debug_manager_uid, S_IRUSR | S_IWUSR);
 
-#else
-
-static int set_expected_size(const char *val, const struct kernel_param *kp)
-{
-    int rv = param_set_uint(val, kp);
-    pr_info("expected_manager_size set to %u\n", expected_manager_size);
-    return rv;
-}
-
-static int get_expected_size(char *buf, const struct kernel_param *kp)
-{
-    return snprintf(buf, PAGE_SIZE, "%u\n", expected_manager_size);
-}
-
-static int set_expected_hash(const char *val, const struct kernel_param *kp)
-{
-    if (strlen(val) != SHA256_DIGEST_SIZE * 2) {
-        pr_err("Invalid hash length: %s\n", val);
-        return -EINVAL;
-    }
-
-    strncpy(expected_manager_hash, val, SHA256_DIGEST_SIZE * 2);
-    expected_manager_hash[SHA256_DIGEST_SIZE * 2] = '\0';
-
-    pr_info("expected_manager_hash set to %s\n", expected_manager_hash);
-    return 0;
-}
-
-static int get_expected_hash(char *buf, const struct kernel_param *kp)
-{
-    return snprintf(buf, PAGE_SIZE, "%s\n", expected_manager_hash);
-}
-
-static struct kernel_param_ops expected_size_ops = {
-    .set = set_expected_size,
-    .get = get_expected_size,
-};
-
-static struct kernel_param_ops expected_hash_ops = {
-    .set = set_expected_hash,
-    .get = get_expected_hash,
-};
-
-module_param_cb(expected_manager_size, &expected_size_ops, &expected_manager_size, 0644);
-
-module_param_cb(expected_manager_hash, &expected_hash_ops, &expected_manager_hash, 0644);
-
 #endif
 
-bool ksu_is_manager_apk(char *path)
+bool is_manager_apk(char *path)
 {
-	int tries = 0;
-
-	while (tries++ < 10) {
-		if (!is_lock_held(path))
-			break;
-
-		pr_info("%s: waiting for %s\n", __func__, path);
-		msleep(100);
-	}
-
-	// let it go, if retry fails, check_v2_signature will fail to open it anyway
-	if (tries == 10) {
-		pr_info("%s: timeout for %s\n", __func__, path);
-		return false;
-	}
-
 	// set debug info to print size and hash to kernel log
 	pr_info("%s: expected size: %u, expected hash: %s\n",
 		path, expected_manager_size, expected_manager_hash);
 
-#ifdef CONFIG_KSU_DEBUG
-	return check_v2_signature(path, EXPECTED_MANAGER_SIZE, EXPECTED_MANAGER_HASH);
-#else
 	return check_v2_signature(path, expected_manager_size, expected_manager_hash);
-#endif
 }
