@@ -50,6 +50,14 @@ static QDF_STATUS policy_mgr_init_cfg(struct wlan_objmgr_psoc *psoc)
 		cfg_get(psoc, CFG_ENABLE_OVERLAP_CH);
 	cfg->dual_mac_feature =
 		cfg_get(psoc, CFG_DUAL_MAC_FEATURE_DISABLE);
+	/*
+	 * Vendor INI can disable DBS / prefer 5 GHz SCC, which makes
+	 * STA-on-5GHz reject a 2.4 GHz SAP. Force DBS connections and
+	 * do not migrate SAP onto the STA channel.
+	 */
+	cfg->dual_mac_feature = ENABLE_DBS_CXN_AND_DISABLE_SIMULTANEOUS_SCAN;
+	cfg->mcc_to_scc_switch = 0;
+	cfg->prefer_5g_scc_to_dbs = 0;
 	cfg->is_force_1x1_enable =
 		cfg_get(psoc, CFG_FORCE_1X1_FEATURE);
 	cfg->sta_sap_scc_on_dfs_chnl =

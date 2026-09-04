@@ -10235,6 +10235,17 @@ static void hdd_override_ini_config(struct hdd_context *hdd_ctx)
 
 	if (QDF_GLOBAL_MONITOR_MODE == cds_get_conparam())
 		hdd_override_all_ps(hdd_ctx);
+
+	/*
+	 * Vendor WCNSS_qcom_cfg.ini can set gDualMacFeatureDisable to 1/2,
+	 * which loads the no_dbs PCL (STA 5 GHz + SAP => 5 GHz SCC only).
+	 * 2.4 GHz hotspot then dies if Wi-Fi is already on. Keep DBS
+	 * connections enabled (INI value 6).
+	 */
+	policy_mgr_set_dual_mac_feature(
+		hdd_ctx->psoc,
+		ENABLE_DBS_CXN_AND_DISABLE_SIMULTANEOUS_SCAN);
+	hdd_debug("forced DualMac DBS cxn enable");
 }
 
 #ifdef ENABLE_MTRACE_LOG
