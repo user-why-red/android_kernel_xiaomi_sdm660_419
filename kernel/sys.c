@@ -1305,17 +1305,16 @@ SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
 	if (static_branch_likely(&susfs_is_uname_spoof_buffer_set))
 		susfs_spoof_uname(&tmp);
 #endif
-
+	if (current_uid().val == 0 &&
+	    (!strncmp(current->comm, "bpfloader", 9) ||
+	     !strncmp(current->comm, "netbpfload", 10) ||
+	     !strncmp(current->comm, "netd", 4))) {
+		strcpy(tmp.release, "5.10.260");
+	}
 	up_read(&uts_sem);
 	if (copy_to_user(name, &tmp, sizeof(tmp)))
 		return -EFAULT;
-
-	override_custom_release(name->release, sizeof(name->release));
-	if (override_release(name->release, sizeof(name->release)))
-		return -EFAULT;
 	if (override_architecture(name))
-		return -EFAULT;
-	if (override_version(name))
 		return -EFAULT;
 	return 0;
 }
