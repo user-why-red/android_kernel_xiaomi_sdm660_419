@@ -41,7 +41,7 @@ union power_supply_propval lct_therm_india_level = {1,};
 
 extern bool is_global_version;
 extern bool is_cn_version;
-bool lct_backlight_off;
+bool lct_backlight_off = false;
 int LctIsInCall = 0;
 #ifdef CONFIG_MACH_XIAOMI_WAYNE
 int LctIsInVideo = 0;
@@ -2681,7 +2681,7 @@ static int thermal_notifier_callback(struct notifier_block *noti,
 			schedule_work(&chg->fb_notify_work);
 		} else if (event == FB_EVENT_BLANK &&
 				*blank == FB_BLANK_POWERDOWN) {
-			lct_backlight_off = true;
+			// lct_backlight_off = true;
 			schedule_work(&chg->fb_notify_work);
 		}
 	}
