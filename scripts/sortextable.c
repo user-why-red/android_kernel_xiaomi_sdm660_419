@@ -162,9 +162,9 @@ static void w2le(uint16_t val, uint16_t *x)
 static uint64_t (*r8)(const uint64_t *);
 static uint32_t (*r)(const uint32_t *);
 static uint16_t (*r2)(const uint16_t *);
-static void (*w8)(uint64_t, uint64_t *);
+static void (*w8)(uint64_t, uint64_t *) __attribute__((unused));
 static void (*w)(uint32_t, uint32_t *);
-static void (*w2)(uint16_t, uint16_t *);
+static void (*w2)(uint16_t, uint16_t *) __attribute__((unused));
 
 typedef void (*table_sort_t)(char *, int);
 
