@@ -9046,13 +9046,15 @@ int set_task_boost(int boost, u64 period)
 	if (boost < TASK_BOOST_NONE || boost >= TASK_BOOST_END)
 		return -EINVAL;
 	if (boost) {
-		current->boost = boost;
-		current->boost_period = (u64)period * 1000 * 1000;
-		current->boost_expires = sched_clock() + current->boost_period;
+		u64 ns = (u64)period * 1000 * 1000;
+
+		WRITE_ONCE(current->boost, boost);
+		WRITE_ONCE(current->boost_period, ns);
+		WRITE_ONCE(current->boost_expires, sched_clock() + ns);
 	} else {
-		current->boost = 0;
-		current->boost_expires = 0;
-		current->boost_period = 0;
+		WRITE_ONCE(current->boost, 0);
+		WRITE_ONCE(current->boost_expires, 0);
+		WRITE_ONCE(current->boost_period, 0);
 	}
 	return 0;
 }
