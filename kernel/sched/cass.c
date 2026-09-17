@@ -48,7 +48,10 @@ static __always_inline unsigned long cass_thermal_load(struct rq *rq)
 #ifdef CONFIG_UCLAMP_TASK
 static __always_inline unsigned long cass_uclamp_min(struct task_struct *p)
 {
-	if (!sched_boost_uclamp())
+	/* Floor from uclamp.min, independent of boost_src. That sysctl
+	 * only picks stune vs uclamp for *boost*, not the clamp itself.
+	 */
+	if (!uclamp_is_used())
 		return 0;
 	return uclamp_eff_value(p, UCLAMP_MIN);
 }
