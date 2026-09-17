@@ -3911,7 +3911,7 @@ static bool age_lruvec(struct lruvec *lruvec, struct scan_control *sc,
 /* Protect the working set of the last N jiffies. 0 meant MGLRU
  * aged/reclaimed UI pages like cache. 1s is what Android sets from
  * userspace when it bothers; don't depend on that. */
-static unsigned long lru_gen_min_ttl __read_mostly = msecs_to_jiffies(1000);
+static unsigned long lru_gen_min_ttl __read_mostly = HZ;
 
 static void lru_gen_age_node(struct pglist_data *pgdat, struct scan_control *sc)
 {
