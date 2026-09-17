@@ -122,8 +122,17 @@ static __always_inline bool cass_prefer_idle(struct task_struct *p)
 	return wake_to_idle(p) || schedtune_prefer_idle(p);
 }
 
+static atomic_t cass_boost_count = ATOMIC_INIT(0);
+
+static __always_inline bool cass_boosted(void)
+{
+	return atomic_read(&cass_boost_count) > 0;
+}
+
 static __always_inline bool cass_prefer_high_cap(struct task_struct *p)
 {
+	if (cass_boosted())
+		return true;
 	if (schedtune_prefer_high_cap(p))
 		return true;
 	return per_task_boost(p) > TASK_BOOST_NONE;
@@ -298,4 +307,20 @@ static int cass_select_task_rq_fair(struct task_struct *p, int prev_cpu,
 {
 	return cass_select_task_rq(p, prev_cpu, wake_flags, false);
 }
+
+int sched_set_boost(int type)
+{
+	if (type < -3 || type > 3)
+		return -EINVAL;
+
+	if (type > 0)
+		atomic_inc(&cass_boost_count);
+	else if (type < 0)
+		atomic_add_unless(&cass_boost_count, -1, 0);
+	else
+		atomic_set(&cass_boost_count, 0);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(sched_set_boost);
 
