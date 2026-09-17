@@ -4320,7 +4320,7 @@ should_reclaim_retry(gfp_t gfp_mask, unsigned order,
 							NR_ZONE_WRITE_PENDING);
 
 				if (2 * write_pending > reclaimable) {
-					congestion_wait(BLK_RW_ASYNC, HZ/10);
+					congestion_wait(BLK_RW_ASYNC, HZ/50);
 					return true;
 				}
 			}
