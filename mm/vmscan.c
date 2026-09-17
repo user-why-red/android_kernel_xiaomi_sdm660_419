@@ -1176,7 +1176,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			goto keep_locked;
 
 		/* page_update_gen() tried to promote this page? */
-		if (lru_gen_enabled() && !&node_reclaim &&
+		if (lru_gen_enabled() && !skip_reference_check &&
 		    page_mapped(page) && PageReferenced(page))
 			goto keep_locked;
 
@@ -4380,7 +4380,7 @@ static int evict_pages(struct lruvec *lruvec, struct scan_control *sc, int swapp
 	if (list_empty(&list))
 		return scanned;
 
-	reclaimed = shrink_page_list(&list, pgdat, sc, 0, NULL, false);
+	reclaimed = shrink_page_list(&list, pgdat, sc, 0, NULL, true);
 
 	/*
 	 * To avoid livelock, don't add rejected pages back to the same lists
