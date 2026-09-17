@@ -6786,15 +6786,12 @@ int task_can_attach(struct task_struct *p,
 	int ret = 0;
 
 	/*
-	 * Kthreads which disallow setaffinity shouldn't be moved
-	 * to a new cpuset; we don't want to change their CPU
-	 * affinity and isolating such threads by their set of
-	 * allowed nodes is unnecessary.  Thus, cpusets are not
-	 * applicable for such threads.  This prevents checking for
-	 * success of set_cpus_allowed_ptr() on all attached tasks
-	 * before cpus_allowed may be changed.
+	 * Kthreads which disallow setaffinity, and perf-critical
+	 * ones pinned to Gold, shouldn't be moved into a cpuset.
+	 * can_attach used to succeed and attach then WARN'd because
+	 * set_cpus_allowed_ptr rejects a copied mask.
 	 */
-	if (p->flags & PF_NO_SETAFFINITY) {
+	if (p->flags & (PF_NO_SETAFFINITY | PF_PERF_CRITICAL)) {
 		ret = -EINVAL;
 		goto out;
 	}
