@@ -159,7 +159,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 	struct cass_cpu_cand cands[2], *best = cands;
 	int this_cpu = raw_smp_processor_id();
 	unsigned long p_util, uc_min;
-	bool has_idle = false;
+	bool has_idle = false, have_best = false;
 	int cidx = 0, cpu;
 
 	p_util = rt ? 0 : task_util_est(p);
@@ -171,21 +171,27 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 		struct cpuidle_state *idle_state;
 		struct rq *rq = cpu_rq(cpu);
 
+		if (cpu_isolated(cpu))
+			continue;
+
 		curr->cap_orig = cass_cap_orig(cpu);
 		curr->cap_max = curr->cap_orig - min(cass_thermal_load(rq),
 						     curr->cap_orig - 1);
 
-		if (curr->cap_max < uc_min && curr->cap_max < best->cap_max)
+		/*
+		 * Skip thermally insufficient CPUs only after we have a
+		 * real candidate. Comparing against an uninitialized
+		 * best->cap_max could skip every CPU and return garbage.
+		 */
+		if (have_best && curr->cap_max < uc_min &&
+		    curr->cap_max < best->cap_max)
 			continue;
 
 		curr->cpu = cpu;
 		if ((sync && cpu == this_cpu && rq->nr_running == 1) ||
 		    available_idle_cpu(cpu) || sched_idle_cpu(cpu)) {
-			if (!uc_min && !cass_prime_cpu(curr)) {
-				if (!has_idle)
-					best = curr;
+			if (!uc_min && !cass_prime_cpu(curr))
 				has_idle = true;
-			}
 			curr->exit_lat = 1;
 			idle_state = idle_get_state(rq);
 			if (idle_state)
@@ -209,14 +215,21 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 		curr->util =
 			curr->util * SCHED_CAPACITY_SCALE / curr->cap_no_therm;
 
-		if (best == curr ||
+		if (!have_best ||
 		    cass_cpu_better(curr, best, p_util, this_cpu, prev_cpu,
 				    sync)) {
 			best = curr;
 			cidx ^= 1;
+			have_best = true;
 		}
 	}
 	rcu_read_unlock();
+
+	if (unlikely(!have_best)) {
+		if (cpumask_test_cpu(prev_cpu, &p->cpus_allowed))
+			return prev_cpu;
+		return cpumask_first(&p->cpus_allowed);
+	}
 
 	return best->cpu;
 }
