@@ -97,6 +97,9 @@ static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
 	if (!cpufreq_this_cpu_can_update(sg_policy->policy))
 		return false;
 
+	if (sg_policy->work_in_progress)
+		return false;
+
 	if (unlikely(READ_ONCE(sg_policy->limits_changed))) {
 		WRITE_ONCE(sg_policy->limits_changed, false);
 		sg_policy->need_freq_update = true;
@@ -190,8 +193,10 @@ static void sugov_deferred_update(struct sugov_policy *sg_policy, u64 time,
 	if (!sugov_update_next_freq(sg_policy, time, next_freq))
 		return;
 
-	if (use_pelt())
-		sg_policy->work_in_progress = true;
+	if (sg_policy->work_in_progress)
+		return;
+
+	sg_policy->work_in_progress = true;
 	irq_work_queue(&sg_policy->irq_work);
 }
 
@@ -309,12 +314,12 @@ unsigned long schedutil_cpu_util(int cpu, unsigned long util_cfs,
 	 * frequency will be gracefully reduced with the utilization decay.
 	 */
 	util = util_cfs + cpu_util_rt(rq);
-	if (type == FREQUENCY_UTIL)
+	if (type == FREQUENCY_UTIL) {
 #ifdef CONFIG_SCHED_TUNE
 		util += schedtune_cpu_margin_with(util, cpu, p);
-#else
-		util = uclamp_rq_util_with(rq, util, p);
 #endif
+		util = uclamp_rq_util_with(rq, util, p);
+	}
 
 	dl_util = cpu_util_dl(rq);
 
@@ -530,10 +535,16 @@ sugov_update_shared(struct update_util_data *hook, u64 time, unsigned int flags)
 static void sugov_work(struct kthread_work *work)
 {
 	struct sugov_policy *sg_policy = container_of(work, struct sugov_policy, work);
+	unsigned int freq;
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&sg_policy->update_lock, flags);
+	freq = sg_policy->next_freq;
+	sg_policy->work_in_progress = false;
+	raw_spin_unlock_irqrestore(&sg_policy->update_lock, flags);
 
 	mutex_lock(&sg_policy->work_lock);
-	__cpufreq_driver_target(sg_policy->policy, sg_policy->next_freq,
-				CPUFREQ_RELATION_L);
+	__cpufreq_driver_target(sg_policy->policy, freq, CPUFREQ_RELATION_L);
 	mutex_unlock(&sg_policy->work_lock);
 }
 
