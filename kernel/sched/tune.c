@@ -321,12 +321,12 @@ static int
 schedtune_boostgroup_update(int idx, int boost)
 {
 	struct boost_groups *bg;
+	unsigned long irq_flags;
 	int cur_boost_max;
 	int old_boost;
 	int cpu;
 	u64 now;
 
-	/* Update per CPU boost groups */
 	for_each_possible_cpu(cpu) {
 		bg = &per_cpu(cpu_boost_groups, cpu);
 
@@ -334,35 +334,34 @@ schedtune_boostgroup_update(int idx, int boost)
 		BUG_ON(!bg->group[idx].valid);
 
 		/*
-		 * Keep track of current boost values to compute the per CPU
-		 * maximum only when it has been affected by the new value of
-		 * the updated boost group
+		 * Same lock as enqueue. irqsave because this is a cgroup
+		 * write (IRQs on) and enqueue can run from IRQ on this CPU.
+		 */
+		raw_spin_lock_irqsave(&bg->lock, irq_flags);
+
+		/*
+		 * Remember the old max so we only walk the groups again
+		 * when this write actually changes it.
 		 */
 		cur_boost_max = bg->boost_max;
 		old_boost = bg->group[idx].boost;
-
-		/* Update the boost value of this boost group */
 		bg->group[idx].boost = boost;
 
-		/* Check if this update increase current max */
 		now = sched_clock_cpu(cpu);
 		if (boost > cur_boost_max &&
 			schedtune_boost_group_active(idx, bg, now)) {
 			bg->boost_max = boost;
 			bg->boost_ts = bg->group[idx].ts;
-
 			trace_sched_tune_boostgroup_update(cpu, 1, bg->boost_max);
-			continue;
-		}
-
-		/* Check if this update has decreased current max */
-		if (cur_boost_max == old_boost && old_boost > boost) {
+		} else if (cur_boost_max == old_boost && old_boost > boost) {
+			/* we used to be the max and dropped: recompute */
 			schedtune_cpu_update(cpu, now);
 			trace_sched_tune_boostgroup_update(cpu, -1, bg->boost_max);
-			continue;
+		} else {
+			trace_sched_tune_boostgroup_update(cpu, 0, bg->boost_max);
 		}
 
-		trace_sched_tune_boostgroup_update(cpu, 0, bg->boost_max);
+		raw_spin_unlock_irqrestore(&bg->lock, irq_flags);
 	}
 
 	return 0;
@@ -519,17 +518,27 @@ void schedtune_dequeue_task(struct task_struct *p, int cpu)
 int schedtune_cpu_boost_with(int cpu, struct task_struct *p)
 {
 	struct boost_groups *bg;
+	unsigned long irq_flags;
 	u64 now;
 	int task_boost = p ? schedtune_task_boost(p) : -100;
+	int boost_max;
 
 	bg = &per_cpu(cpu_boost_groups, cpu);
 	now = sched_clock_cpu(cpu);
 
-	/* Check to see if we have a hold in effect */
+	/*
+	 * enqueue/dequeue already hold bg->lock around boost_max.
+	 * sugov reads this from the other CPUs on a shared policy, so
+	 * updating it unlocked tears the value they just computed.
+	 */
+	raw_spin_lock_irqsave(&bg->lock, irq_flags);
+	/* hold expired: drop this group's contribution from the max */
 	if (schedtune_boost_timeout(now, bg->boost_ts))
 		schedtune_cpu_update(cpu, now);
+	boost_max = bg->boost_max;
+	raw_spin_unlock_irqrestore(&bg->lock, irq_flags);
 
-	return max(bg->boost_max, task_boost);
+	return max(boost_max, task_boost);
 }
 
 int schedtune_task_boost(struct task_struct *p)
