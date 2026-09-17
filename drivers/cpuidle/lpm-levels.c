@@ -422,7 +422,7 @@ unlock_and_return:
 static int psci_enter_sleep(struct lpm_cpu *cpu, int idx, bool from_idle)
 {
 	int affinity_level = 0, state_id = 0, power_state = 0;
-	int ret, success;
+	int ret;
 	/*
 	 * idx = 0 is the default LPM state
 	 */
@@ -443,8 +443,7 @@ static int psci_enter_sleep(struct lpm_cpu *cpu, int idx, bool from_idle)
 	affinity_level = PSCI_AFFINITY_LEVEL(affinity_level);
 	state_id += power_state + affinity_level + cpu->levels[idx].psci_id;
 
-	ret = !arm_cpuidle_suspend(state_id);
-	success = (ret == 0);
+	ret = arm_cpuidle_suspend(state_id);
 
 	if (from_idle && cpu->levels[idx].use_bc_timer)
 		tick_broadcast_exit();
@@ -469,7 +468,37 @@ static int lpm_cpuidle_select(struct cpuidle_driver *drv,
 static int lpm_cpuidle_enter(struct cpuidle_device *dev,
 		struct cpuidle_driver *drv, int idx)
 {
-	wfi();
+	struct lpm_cpu *cpu = per_cpu(cpu_lpm, dev->cpu);
+	const struct cpumask *cpumask = get_cpu_mask(dev->cpu);
+	ktime_t start;
+	bool success = false;
+	int ret;
+
+	if (need_resched())
+		return idx;
+
+	/* TEO picked idx; drop to the deepest mode idle still allows. */
+	for (; idx >= 0; idx--) {
+		if (lpm_cpu_mode_allow(dev->cpu, idx, true))
+			break;
+	}
+	if (idx < 0)
+		idx = 0;
+
+	start = ktime_get();
+	cpu_prepare(cpu, idx, true);
+	cluster_prepare(cpu->parent, cpumask, idx, true, ktime_to_ns(start));
+
+	if (need_resched())
+		goto unprepare;
+
+	ret = psci_enter_sleep(cpu, idx, true);
+	success = (ret == 0);
+
+unprepare:
+	cluster_unprepare(cpu->parent, cpumask, idx, true,
+			  ktime_to_ns(ktime_get()), success);
+	cpu_unprepare(cpu, idx, true);
 
 	return idx;
 }

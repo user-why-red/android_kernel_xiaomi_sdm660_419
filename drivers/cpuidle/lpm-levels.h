@@ -101,7 +101,7 @@ static inline bool is_IPI_pending(const struct cpumask *mask)
 	unsigned int cpu;
 
 	for_each_cpu(cpu, mask) {
-		if per_cpu(pending_ipi, cpu)
+		if (per_cpu(pending_ipi, cpu))
 			return true;
 	}
 	return false;
