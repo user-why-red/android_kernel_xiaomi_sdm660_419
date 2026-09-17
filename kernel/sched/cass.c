@@ -198,7 +198,7 @@ done:
 	return res > 0;
 }
 
-static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt)
+static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 {
 	struct cass_cpu_cand cands[2], *best = cands;
 	int this_cpu = raw_smp_processor_id();
@@ -207,7 +207,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 	bool prefer_idle, prefer_high_cap;
 	int cidx = 0, cpu;
 
-	p_util = rt ? 0 : task_util_est(p);
+	p_util = task_util_est(p);
 	uc_min = cass_uclamp_min(p);
 	uc_max = cass_uclamp_max(p);
 	prefer_idle = cass_prefer_idle(p);
@@ -283,7 +283,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 }
 
 static int cass_select_task_rq(struct task_struct *p, int prev_cpu,
-			       int sd_flag, int wake_flags, bool rt)
+			       int sd_flag, int wake_flags)
 {
 	bool sync;
 
@@ -296,19 +296,19 @@ static int cass_select_task_rq(struct task_struct *p, int prev_cpu,
 	if (unlikely(!cpumask_intersects(&p->cpus_allowed, cpu_active_mask)))
 		return cpumask_first(&p->cpus_allowed);
 
-	if (!rt && !(sd_flag & SD_BALANCE_FORK))
+	if (!(sd_flag & SD_BALANCE_FORK))
 		sync_entity_load_avg(&p->se);
 
 	sync = (wake_flags & WF_SYNC) && !(current->flags & PF_EXITING);
 
-	return cass_best_cpu(p, prev_cpu, sync, rt);
+	return cass_best_cpu(p, prev_cpu, sync);
 }
 
 static int cass_select_task_rq_fair(struct task_struct *p, int prev_cpu,
 				    int sd_flag, int wake_flags,
 				    int sibling_count_hint)
 {
-	return cass_select_task_rq(p, prev_cpu, sd_flag, wake_flags, false);
+	return cass_select_task_rq(p, prev_cpu, sd_flag, wake_flags);
 }
 
 int sched_set_boost(int type)
