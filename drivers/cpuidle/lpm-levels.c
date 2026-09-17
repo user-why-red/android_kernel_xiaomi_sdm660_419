@@ -451,20 +451,6 @@ static int psci_enter_sleep(struct lpm_cpu *cpu, int idx, bool from_idle)
 	return ret;
 }
 
-static int lpm_cpuidle_select(struct cpuidle_driver *drv,
-		struct cpuidle_device *dev, bool *stop_tick)
-{
-#ifdef CONFIG_NO_HZ_COMMON
-	ktime_t delta_next;
-	s64 duration_ns = tick_nohz_get_sleep_length(&delta_next);
-
-	if (duration_ns <= TICK_NSEC)
-		*stop_tick = false;
-#endif
-
-	return 0;
-}
-
 static int lpm_cpuidle_enter(struct cpuidle_device *dev,
 		struct cpuidle_driver *drv, int idx)
 {
@@ -572,12 +558,6 @@ static int cpuidle_register_cpu(struct cpuidle_driver *drv,
 }
 #endif
 
-static struct cpuidle_governor lpm_governor = {
-	.name =		"qcom",
-	.rating =	30,
-	.select =	lpm_cpuidle_select,
-};
-
 static int cluster_cpuidle_register(struct lpm_cluster *cl)
 {
 	int i = 0, ret = 0;
@@ -652,16 +632,6 @@ static int cluster_cpuidle_register(struct lpm_cluster *cl)
 	}
 	return 0;
 }
-
-/**
- * init_lpm - initializes the governor
- */
-static int __init init_lpm(void)
-{
-	return cpuidle_register_governor(&lpm_governor);
-}
-
-postcore_initcall(init_lpm);
 
 static void register_cpu_lpm_stats(struct lpm_cpu *cpu,
 		struct lpm_cluster *parent)
