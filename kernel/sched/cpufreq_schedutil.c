@@ -57,6 +57,10 @@ struct sugov_cpu {
 
 	u64			last_update;
 
+	/* IOWAIT boost, doubles while waits keep coming in */
+	unsigned int		iowait_boost;
+	bool			iowait_boost_pending;
+
 	struct sched_walt_cpu_load walt_load;
 
 	unsigned long		bw_dl;
@@ -428,6 +432,70 @@ static inline void ignore_dl_rate_limit(struct sugov_cpu *sg_cpu, struct sugov_p
 		WRITE_ONCE(sg_policy->limits_changed, true);
 }
 
+#define IOWAIT_BOOST_MIN	(SCHED_CAPACITY_SCALE / 8)
+
+static void sugov_iowait_reset(struct sugov_cpu *sg_cpu, u64 time, bool set_min)
+{
+	sg_cpu->iowait_boost = set_min ? IOWAIT_BOOST_MIN : 0;
+	sg_cpu->iowait_boost_pending = set_min;
+	sg_cpu->last_update = time;
+}
+
+static void sugov_iowait_boost(struct sugov_cpu *sg_cpu, u64 time,
+			       unsigned int flags)
+{
+	bool boost = flags & SCHED_CPUFREQ_IOWAIT;
+
+	if (sg_cpu->iowait_boost) {
+		s64 delta_ns = time - sg_cpu->last_update;
+
+		if ((s64)delta_ns > TICK_NSEC) {
+			sugov_iowait_reset(sg_cpu, time, boost);
+			return;
+		}
+	}
+
+	if (!boost)
+		return;
+
+	/* One bump per wakeup, not per util callback */
+	if (sg_cpu->iowait_boost_pending)
+		return;
+
+	sg_cpu->iowait_boost_pending = true;
+
+	if (sg_cpu->iowait_boost) {
+		sg_cpu->iowait_boost <<= 1;
+		if (sg_cpu->iowait_boost > SCHED_CAPACITY_SCALE)
+			sg_cpu->iowait_boost = SCHED_CAPACITY_SCALE;
+	} else {
+		sg_cpu->iowait_boost = IOWAIT_BOOST_MIN;
+	}
+}
+
+static void sugov_iowait_apply(struct sugov_cpu *sg_cpu, u64 time,
+			       unsigned long *util, unsigned long *max)
+{
+	unsigned long boost;
+
+	if (!sg_cpu->iowait_boost)
+		return;
+
+	if (sg_cpu->iowait_boost_pending) {
+		sg_cpu->iowait_boost_pending = false;
+	} else {
+		sg_cpu->iowait_boost >>= 1;
+		if (sg_cpu->iowait_boost < IOWAIT_BOOST_MIN) {
+			sugov_iowait_reset(sg_cpu, time, false);
+			return;
+		}
+	}
+
+	boost = (sg_cpu->iowait_boost * (*max)) >> SCHED_CAPACITY_SHIFT;
+	if (*util < boost)
+		*util = boost;
+}
+
 static void sugov_update_single(struct update_util_data *hook, u64 time,
 				unsigned int flags)
 {
@@ -440,6 +508,7 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 	if (flags & SCHED_CPUFREQ_PL)
 		return;
 
+	sugov_iowait_boost(sg_cpu, time, flags);
 	sg_cpu->last_update = time;
 
 	ignore_dl_rate_limit(sg_cpu, sg_policy);
@@ -453,6 +522,7 @@ static void sugov_update_single(struct update_util_data *hook, u64 time,
 
 	util = sugov_get_util(sg_cpu);
 	max = sg_cpu->max;
+	sugov_iowait_apply(sg_cpu, time, &util, &max);
 
 	next_f = get_next_freq(sg_policy, util, max);
 	/*
@@ -493,6 +563,7 @@ static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
 
 		j_util = sugov_get_util(j_sg_cpu);
 		j_max = j_sg_cpu->max;
+		sugov_iowait_apply(j_sg_cpu, time, &j_util, &j_max);
 
 		if (j_util * max > j_max * util) {
 			util = j_util;
@@ -515,6 +586,7 @@ sugov_update_shared(struct update_util_data *hook, u64 time, unsigned int flags)
 
 	raw_spin_lock(&sg_policy->update_lock);
 
+	sugov_iowait_boost(sg_cpu, time, flags);
 	sg_cpu->last_update = time;
 
 	ignore_dl_rate_limit(sg_cpu, sg_policy);
