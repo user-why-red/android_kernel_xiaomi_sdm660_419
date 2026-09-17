@@ -159,6 +159,23 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 	    cass_cmp(a->cap_orig <= uc_max, b->cap_orig <= uc_max))
 		goto done;
 
+	/* Unhinted and still fits: stay on the smaller cluster. Remaining
+	 * cap used to wake Gold for every idle bg wakeup on 4+4. If the
+	 * smaller CPU would go over capacity, skip and let relative util
+	 * spill to Gold.
+	 */
+	if (!prefer_high_cap) {
+		bool a_fits = fits_capacity(p_util, a->cap_max, 1280) &&
+			      a->eff_util <= a->cap_max;
+		bool b_fits = fits_capacity(p_util, b->cap_max, 1280) &&
+			      b->eff_util <= b->cap_max;
+
+		if (a_fits && b_fits && cass_cmp(b->cap_orig, a->cap_orig))
+			goto done;
+		if (a_fits != b_fits && cass_cmp(a_fits, b_fits))
+			goto done;
+	}
+
 	/* Relative util, fixed-point. Integer div truncated this to 0/0
 	 * until a CPU was over capacity, so the primary key never fired.
 	 */
@@ -267,8 +284,9 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 			curr->util * SCHED_CAPACITY_SCALE / curr->cap_no_therm;
 
 		if (!have_best ||
-		    cass_cpu_better(curr, best, p_util, this_cpu, prev_cpu,
-				    sync, uc_max, prefer_high_cap)) {
+		    cass_cpu_better(curr, best, max(p_util, uc_min),
+				    this_cpu, prev_cpu, sync, uc_max,
+				    prefer_high_cap)) {
 			best = curr;
 			cidx ^= 1;
 			have_best = true;
