@@ -13,6 +13,7 @@ void simple_lmk_mm_freed(struct mm_struct *mm);
 static inline void simple_lmk_mm_freed(struct mm_struct *mm)
 {
 }
+void simple_lmk_need_reclaim(void);
 #endif
 
 #endif /* _SIMPLE_LMK_H_ */

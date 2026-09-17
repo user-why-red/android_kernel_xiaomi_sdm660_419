@@ -18,6 +18,7 @@
  */
 
 #include <linux/oom.h>
+#include <linux/simple_lmk.h>
 #include <linux/mm.h>
 #include <linux/err.h>
 #include <linux/gfp.h>
@@ -1077,11 +1078,12 @@ bool out_of_memory(struct oom_control *oc)
 	unsigned long freed = 0;
 	enum oom_constraint constraint = CONSTRAINT_NONE;
 
-	/* Return true since Simple LMK automatically kills in the background */
-	if (IS_ENABLED(CONFIG_ANDROID_SIMPLE_LMK))
+	if (IS_ENABLED(CONFIG_ANDROID_SIMPLE_LMK)) {
+		simple_lmk_need_reclaim();
 		return true;
+	}
 
-	if (oom_killer_disabled || IS_ENABLED(CONFIG_ANDROID_SIMPLE_LMK))
+	if (oom_killer_disabled)
 		return false;
 
 	if (try_online_one_block(numa_node_id())) {
