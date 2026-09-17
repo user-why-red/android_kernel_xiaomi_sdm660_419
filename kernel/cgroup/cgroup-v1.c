@@ -548,8 +548,10 @@ static ssize_t __cgroup1_procs_write(struct kernfs_open_file *of,
 	/* Zygote moving a new proc into top-app — launch. procs or tasks. */
 	if (!ret && of->kn->parent &&
 	    !strcmp(of->kn->parent->name, "top-app") &&
-	    task_is_zygote(task->parent))
+	    task_is_zygote(task->parent)) {
 		devfreq_boost_kick_max(DEVFREQ_MSM_CPU_DDR_BW, 250);
+		mm_launch_reclaim();
+	}
 
 out_finish:
 	cgroup_procs_write_finish(task);

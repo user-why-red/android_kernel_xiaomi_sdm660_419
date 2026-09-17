@@ -7778,6 +7778,50 @@ void setup_per_zone_wmarks(void)
 	spin_unlock(&lock);
 }
 
+#define LAUNCH_EXTRA_KBYTES	(32 * 1024)
+#define LAUNCH_EXTRA_MSEC	250
+
+static int launch_extra_base = -1;
+static DEFINE_SPINLOCK(launch_extra_lock);
+
+static void launch_extra_end(struct work_struct *work)
+{
+	spin_lock(&launch_extra_lock);
+	if (launch_extra_base >= 0) {
+		extra_free_kbytes = launch_extra_base;
+		launch_extra_base = -1;
+	}
+	spin_unlock(&launch_extra_lock);
+	setup_per_zone_wmarks();
+}
+static DECLARE_DELAYED_WORK(launch_extra_work, launch_extra_end);
+
+void mm_launch_reclaim(void)
+{
+	pg_data_t *pgdat = NODE_DATA(first_online_node);
+	struct zone *zone;
+	int idx;
+
+	spin_lock(&launch_extra_lock);
+	if (launch_extra_base < 0)
+		launch_extra_base = extra_free_kbytes;
+	extra_free_kbytes = launch_extra_base + LAUNCH_EXTRA_KBYTES;
+	spin_unlock(&launch_extra_lock);
+
+	setup_per_zone_wmarks();
+
+	for (idx = 0; idx < MAX_NR_ZONES; idx++) {
+		zone = &pgdat->node_zones[idx];
+		if (managed_zone(zone)) {
+			wakeup_kswapd(zone, GFP_KERNEL, 0, idx);
+			break;
+		}
+	}
+
+	mod_delayed_work(system_unbound_wq, &launch_extra_work,
+			 msecs_to_jiffies(LAUNCH_EXTRA_MSEC));
+}
+
 /*
  * Initialise min_free_kbytes.
  *
