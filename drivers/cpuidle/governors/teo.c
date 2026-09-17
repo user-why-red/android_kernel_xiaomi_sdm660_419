@@ -137,16 +137,13 @@
 #include <linux/tick.h>
 
 /*
- * The number of bits to shift the cpu's capacity by in order to determine
- * the utilized threshold.
+ * Bits to shift CPU capacity for the utilized threshold.
  *
- * 6 was chosen based on testing as the number that achieved the best balance
- * of power and performance on average.
- *
- * The resulting threshold is high enough to not be triggered by background
- * noise and low enough to react quickly when activity starts to ramp up.
+ * Upstream used 6 (~1.5%). After CASS packs bg onto Silver, PELT sits
+ * above that with nothing runnable and TEO demotes PC every idle.
+ * 3 is 12.5% — still demotes a busy CPU, not a parked worker.
  */
-#define UTIL_THRESHOLD_SHIFT 6
+#define UTIL_THRESHOLD_SHIFT 3
 
 /*
  * The PULSE value is added to metrics when they grow and the DECAY_SHIFT value
