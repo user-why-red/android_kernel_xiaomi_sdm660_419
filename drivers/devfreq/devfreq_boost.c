@@ -55,6 +55,19 @@ static struct df_boost_drv df_boost_drv_g __read_mostly = {
 		       CONFIG_DEVFREQ_MSM_CPU_DDR_BW_BOOST_FREQ)
 };
 
+static unsigned long boost_table_min(struct devfreq *df)
+{
+	unsigned long *freq_table = df->profile->freq_table;
+	unsigned int n = df->profile->max_state;
+
+	if (!freq_table || n < 1)
+		return 0;
+
+	if (freq_table[0] < freq_table[n - 1])
+		return freq_table[0];
+	return freq_table[n - 1];
+}
+
 static void __devfreq_boost_kick(struct boost_dev *b)
 {
 	if (!READ_ONCE(b->df) || test_bit(SCREEN_OFF, &b->state))
@@ -147,16 +160,19 @@ static void devfreq_max_unboost(struct work_struct *work)
 
 static void devfreq_update_boosts(struct boost_dev *b, unsigned long state)
 {
-	struct devfreq *df = b->df;
+	struct devfreq *df = READ_ONCE(b->df);
+
+	if (!df)
+		return;
 
 	mutex_lock(&df->lock);
 	if (state & BIT(SCREEN_OFF)) {
-		df->min_freq = df->profile->freq_table[0];
+		df->min_freq = boost_table_min(df);
 		df->max_boost = false;
 	} else {
 		df->min_freq = state & BIT(INPUT_BOOST) ?
 			       min(b->boost_freq, df->max_freq) :
-			       df->profile->freq_table[0];
+			       boost_table_min(df);
 		df->max_boost = state & BIT(MAX_BOOST);
 	}
 	update_devfreq(df);
@@ -199,18 +215,25 @@ static int fb_notifier_cb(struct notifier_block *nb,
 	struct df_boost_drv *d = container_of(nb, typeof(*d), fb_notif);
 	int i, *blank = ((struct fb_event *)data)->data;
 
-	/* Parse framebuffer blank events as soon as they occur */
-	if (action != FB_EARLY_EVENT_BLANK)
+	struct fb_event *ev = data;
+	int *blank;
+
+	if (action != FB_EARLY_EVENT_BLANK || !ev || !ev->data)
 		return NOTIFY_OK;
 
-	/* Boost when the screen turns on and unboost when it turns off */
+	blank = ev->data;
+
 	for (i = 0; i < DEVFREQ_MAX; i++) {
 		struct boost_dev *b = &d->devices[i];
 
 		if (*blank == FB_BLANK_UNBLANK) {
 			clear_bit(SCREEN_OFF, &b->state);
-			__devfreq_boost_kick_max(b,
-				CONFIG_DEVFREQ_WAKE_BOOST_DURATION_MS);
+			/* duration 0 means we asked for no wake boost */
+			if (CONFIG_DEVFREQ_WAKE_BOOST_DURATION_MS)
+				__devfreq_boost_kick_max(b,
+					CONFIG_DEVFREQ_WAKE_BOOST_DURATION_MS);
+			else
+				wake_up(&b->boost_waitq);
 		} else {
 			set_bit(SCREEN_OFF, &b->state);
 			wake_up(&b->boost_waitq);
@@ -289,11 +312,6 @@ static const struct input_device_id devfreq_boost_ids[] = {
 		.keybit = { [BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH) },
 		.absbit = { [BIT_WORD(ABS_X)] =
 			BIT_MASK(ABS_X) | BIT_MASK(ABS_Y) }
-	},
-	/* Keypad */
-	{
-		.flags = INPUT_DEVICE_ID_MATCH_EVBIT,
-		.evbit = { BIT_MASK(EV_KEY) }
 	},
 	{ }
 };
