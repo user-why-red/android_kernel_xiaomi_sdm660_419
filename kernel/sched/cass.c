@@ -283,17 +283,20 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 }
 
 static int cass_select_task_rq(struct task_struct *p, int prev_cpu,
-			       int wake_flags, bool rt)
+			       int sd_flag, int wake_flags, bool rt)
 {
 	bool sync;
 
-	if (wake_flags & SD_BALANCE_EXEC)
+	/* exec/fork are in sd_flag, not wake_flags. execve passes
+	 * wake_flags=0 so this never fired, and WF_* can alias the bit.
+	 */
+	if (sd_flag & SD_BALANCE_EXEC)
 		return prev_cpu;
 
 	if (unlikely(!cpumask_intersects(&p->cpus_allowed, cpu_active_mask)))
 		return cpumask_first(&p->cpus_allowed);
 
-	if (!rt && !(wake_flags & SD_BALANCE_FORK))
+	if (!rt && !(sd_flag & SD_BALANCE_FORK))
 		sync_entity_load_avg(&p->se);
 
 	sync = (wake_flags & WF_SYNC) && !(current->flags & PF_EXITING);
@@ -305,7 +308,7 @@ static int cass_select_task_rq_fair(struct task_struct *p, int prev_cpu,
 				    int sd_flag, int wake_flags,
 				    int sibling_count_hint)
 {
-	return cass_select_task_rq(p, prev_cpu, wake_flags, false);
+	return cass_select_task_rq(p, prev_cpu, sd_flag, wake_flags, false);
 }
 
 int sched_set_boost(int type)
