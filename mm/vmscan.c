@@ -6555,8 +6555,8 @@ static int kshrinkd(void *pgdat)
 {
 	pg_data_t *p = pgdat;
 
-	/* This is technically a kswapd thread */
-	current->flags |= PF_KSWAPD;
+	/* Same flags as kswapd so shrinker allocations can't recurse. */
+	current->flags |= PF_MEMALLOC | PF_SWAPWRITE | PF_KSWAPD;
 	set_freezable();
 	while (1) {
 		unsigned int pri = DEF_PRIORITY;
@@ -6583,7 +6583,7 @@ static int kshrinkd(void *pgdat)
 			pri = pri ? pri - 1 : DEF_PRIORITY;
 		}
 	}
-	current->flags &= ~PF_KSWAPD;
+	current->flags &= ~(PF_MEMALLOC | PF_SWAPWRITE | PF_KSWAPD);
 
 	return 0;
 }
