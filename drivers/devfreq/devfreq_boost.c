@@ -213,10 +213,8 @@ static int fb_notifier_cb(struct notifier_block *nb,
 			  unsigned long action, void *data)
 {
 	struct df_boost_drv *d = container_of(nb, typeof(*d), fb_notif);
-	int i, *blank = ((struct fb_event *)data)->data;
-
 	struct fb_event *ev = data;
-	int *blank;
+	int i, *blank;
 
 	if (action != FB_EARLY_EVENT_BLANK || !ev || !ev->data)
 		return NOTIFY_OK;
