@@ -263,31 +263,14 @@ static void scan_and_kill(void)
 			vtsk->signal->oom_score_adj,
 			victim->size << (PAGE_SHIFT - 10));
 
-		/* Make the victim reap anonymous memory first in exit_mmap() */
 		set_bit(MMF_OOM_VICTIM, &mm->flags);
-
-		/* Accelerate the victim's death by forcing the kill signal */
 		do_send_sig_info(SIGKILL, SEND_SIG_FORCED, vtsk, PIDTYPE_TGID);
 
-		/*
-		 * Mark the thread group dead so that other kernel code knows,
-		 * and then elevate the thread group to SCHED_RR with minimum RT
-		 * priority. The entire group needs to be elevated because
-		 * there's no telling which threads have references to the mm as
-		 * well as which thread will happen to put the final reference
-		 * and release the mm's memory. If the mm is released from a
-		 * thread with low scheduling priority then it may take a very
-		 * long time for exit_mmap() to complete.
-		 */
+		/* Reaper unmaps; don't SCHED_RR + all-cpus the victim onto Gold. */
 		rcu_read_lock();
 		for_each_thread(vtsk, t)
 			set_tsk_thread_flag(t, TIF_MEMDIE);
-		for_each_thread(vtsk, t)
-			set_task_rt_prio(t, 1);
 		rcu_read_unlock();
-
-		/* Allow the victim to run on any CPU. This won't schedule. */
-		set_cpus_allowed_ptr(vtsk, cpu_all_mask);
 
 		/* Signals can't wake frozen tasks; only a thaw operation can */
 		__thaw_task(vtsk);

@@ -1073,6 +1073,12 @@ EXPORT_SYMBOL_GPL(unregister_oom_notifier);
  * OR try to be smart about which process to kill. Note that we
  * don't have to be perfect here, we just have to be good.
  */
+#ifdef CONFIG_ANDROID_SIMPLE_LMK
+void simple_lmk_need_reclaim(void);
+#else
+static inline void simple_lmk_need_reclaim(void) { }
+#endif
+
 bool out_of_memory(struct oom_control *oc)
 {
 	unsigned long freed = 0;
