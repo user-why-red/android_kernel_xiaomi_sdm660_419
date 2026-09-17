@@ -324,3 +324,27 @@ int sched_set_boost(int type)
 }
 EXPORT_SYMBOL_GPL(sched_set_boost);
 
+static bool cass_can_migrate_task(struct task_struct *p, int src_cpu,
+				  int dst_cpu)
+{
+	unsigned long uc_max, src_orig, dst_orig;
+
+	if (cpu_isolated(dst_cpu))
+		return false;
+
+	src_orig = cass_cap_orig(src_cpu);
+	dst_orig = cass_cap_orig(dst_cpu);
+	uc_max = cass_uclamp_max(p);
+
+	/* Don't pull a clamped task onto a CPU wakeup would reject. */
+	if (uc_max < SCHED_CAPACITY_SCALE &&
+	    src_orig <= uc_max && dst_orig > uc_max)
+		return false;
+
+	/* Boosted / prefer_high_cap stays on the bigger CPU. */
+	if (cass_prefer_high_cap(p) && dst_orig < src_orig)
+		return false;
+
+	return true;
+}
+

@@ -9184,6 +9184,11 @@ static inline bool can_migrate_boosted_task(struct task_struct *p,
 	return true;
 }
 
+#ifdef CONFIG_SCHED_CASS
+static bool cass_can_migrate_task(struct task_struct *p, int src_cpu,
+				  int dst_cpu);
+#endif
+
 /*
  * can_migrate_task - may task p from runqueue rq be migrated to this_cpu?
  */
@@ -9249,6 +9254,11 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 
 	/* Record that we found atleast one task that could run on dst_cpu */
 	env->flags &= ~LBF_ALL_PINNED;
+
+#ifdef CONFIG_SCHED_CASS
+	if (!cass_can_migrate_task(p, env->src_cpu, env->dst_cpu))
+		return 0;
+#endif
 
 	if (static_branch_unlikely(&sched_energy_present)) {
 		struct root_domain *rd = env->dst_rq->rd;
