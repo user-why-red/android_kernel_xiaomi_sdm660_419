@@ -52,10 +52,22 @@ static __always_inline unsigned long cass_uclamp_min(struct task_struct *p)
 		return 0;
 	return uclamp_eff_value(p, UCLAMP_MIN);
 }
+
+static __always_inline unsigned long cass_uclamp_max(struct task_struct *p)
+{
+	if (!uclamp_is_used())
+		return SCHED_CAPACITY_SCALE;
+	return uclamp_eff_value(p, UCLAMP_MAX);
+}
 #else
 static __always_inline unsigned long cass_uclamp_min(struct task_struct *p)
 {
 	return 0;
+}
+
+static __always_inline unsigned long cass_uclamp_max(struct task_struct *p)
+{
+	return SCHED_CAPACITY_SCALE;
 }
 #endif
 
@@ -105,20 +117,44 @@ bool cass_prime_cpu(const struct cass_cpu_cand *c)
 	       cass_cap_orig(nr_cpu_ids - 2) != SCHED_CAPACITY_SCALE;
 }
 
+static __always_inline bool cass_prefer_idle(struct task_struct *p)
+{
+	return wake_to_idle(p) || schedtune_prefer_idle(p);
+}
+
+static __always_inline bool cass_prefer_high_cap(struct task_struct *p)
+{
+	if (schedtune_prefer_high_cap(p))
+		return true;
+	return per_task_boost(p) > TASK_BOOST_NONE;
+}
+
 static __always_inline
 bool cass_cpu_better(const struct cass_cpu_cand *a,
 		     const struct cass_cpu_cand *b, unsigned long p_util,
-		     int this_cpu, int prev_cpu, bool sync)
+		     int this_cpu, int prev_cpu, bool sync,
+		     unsigned long uc_max, bool prefer_high_cap)
 {
 #define cass_cmp(a, b) ({ res = (long)(a) - (long)(b); })
 #define cass_eq(a, b) ({ res = (a) == (b); })
 	long res;
+
+	/* uclamp.max: a CPU that fits the clamp beats one that does not.
+	 * Before relative util so background stays on Silver even if Gold
+	 * is idle. If neither CPU fits, fall through.
+	 */
+	if (uc_max < SCHED_CAPACITY_SCALE &&
+	    cass_cmp(a->cap_orig <= uc_max, b->cap_orig <= uc_max))
+		goto done;
 
 	/* Relative util, fixed-point. Integer div truncated this to 0/0
 	 * until a CPU was over capacity, so the primary key never fired.
 	 */
 	if (cass_cmp(b->eff_util * SCHED_CAPACITY_SCALE / max(b->cap_max, 1UL),
 		     a->eff_util * SCHED_CAPACITY_SCALE / max(a->cap_max, 1UL)))
+		goto done;
+
+	if (prefer_high_cap && cass_cmp(a->cap_orig, b->cap_orig))
 		goto done;
 
 	if (cass_cmp(fits_capacity(p_util, a->cap_max, 1280),
@@ -157,12 +193,16 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 {
 	struct cass_cpu_cand cands[2], *best = cands;
 	int this_cpu = raw_smp_processor_id();
-	unsigned long p_util, uc_min;
+	unsigned long p_util, uc_min, uc_max;
 	bool has_idle = false, have_best = false;
+	bool prefer_idle, prefer_high_cap;
 	int cidx = 0, cpu;
 
 	p_util = rt ? 0 : task_util_est(p);
 	uc_min = cass_uclamp_min(p);
+	uc_max = cass_uclamp_max(p);
+	prefer_idle = cass_prefer_idle(p);
+	prefer_high_cap = cass_prefer_high_cap(p);
 
 	rcu_read_lock();
 	for_each_cpu_and(cpu, &p->cpus_allowed, cpu_active_mask) {
@@ -189,7 +229,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 		curr->cpu = cpu;
 		if ((sync && cpu == this_cpu && rq->nr_running == 1) ||
 		    available_idle_cpu(cpu) || sched_idle_cpu(cpu)) {
-			if (!uc_min && !cass_prime_cpu(curr))
+			if (prefer_idle || (!uc_min && !cass_prime_cpu(curr)))
 				has_idle = true;
 			curr->exit_lat = 1;
 			idle_state = idle_get_state(rq);
@@ -216,7 +256,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 
 		if (!have_best ||
 		    cass_cpu_better(curr, best, p_util, this_cpu, prev_cpu,
-				    sync)) {
+				    sync, uc_max, prefer_high_cap)) {
 			best = curr;
 			cidx ^= 1;
 			have_best = true;
