@@ -142,7 +142,7 @@ struct cpuset {
 #ifdef CONFIG_CPUSETS_ASSIST
 struct cs_target {
 	const char *name;
-	char *cpus;
+	const char *cpus;
 };
 #endif
 
@@ -1786,22 +1786,11 @@ out_unlock:
 	return retval ?: nbytes;
 }
 
-#ifdef CONFIG_CPUSETS_ASSIST
-static ssize_t cpuset_write_resmask_assist(struct kernfs_open_file *of,
-					   struct cs_target tgt, size_t nbytes,
-					   loff_t off)
-{
-	pr_info("cpuset_assist: setting %s to %s\n", tgt.name, tgt.cpus);
-	return cpuset_write_resmask(of, tgt.cpus, nbytes, off);
-}
-#endif
-
 static ssize_t cpuset_write_resmask_wrapper(struct kernfs_open_file *of,
 					 char *buf, size_t nbytes, loff_t off)
 {
 #ifdef CONFIG_CPUSETS_ASSIST
-	static struct cs_target cs_targets[] = {
-		/* Little-only cpusets go first */
+	static const struct cs_target cs_targets[] = {
 		{ "background",        "0-3" },
 		{ "system-background", "0-3" },
 		{ "restricted",        "0-3" },
@@ -1810,20 +1799,28 @@ static ssize_t cpuset_write_resmask_wrapper(struct kernfs_open_file *of,
 		{ "camera-daemon",     "0-7" },
 	};
 	struct cpuset *cs = css_cs(of_css(of));
+	const char *name;
+	char forced[8];
 	int i;
-
-	if (!strcmp(current->comm, "init")) {
-		for (i = 0; i < ARRAY_SIZE(cs_targets); i++) {
-			struct cs_target tgt = cs_targets[i];
-
-			if (!strcmp(cs->css.cgroup->kn->name, tgt.name))
-				return cpuset_write_resmask_assist(of, tgt,
-								   nbytes, off);
-		}
-	}
 #endif
 
 	buf = strstrip(buf);
+
+#ifdef CONFIG_CPUSETS_ASSIST
+	/* Pin bg on Silver for every writer. init-only was undone by perfd. */
+	name = cs->css.cgroup->kn->name;
+	for (i = 0; i < ARRAY_SIZE(cs_targets); i++) {
+		if (strcmp(name, cs_targets[i].name))
+			continue;
+		if (strcmp(buf, cs_targets[i].cpus)) {
+			pr_debug("cpuset_assist: %s '%s' -> '%s'\n",
+				 name, buf, cs_targets[i].cpus);
+			strlcpy(forced, cs_targets[i].cpus, sizeof(forced));
+			buf = forced;
+		}
+		break;
+	}
+#endif
 
 	return cpuset_write_resmask(of, buf, nbytes, off);
 }
