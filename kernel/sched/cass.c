@@ -5,6 +5,7 @@
  * Backported to 4.19: cpus_allowed, arch_scale_cpu_capacity(sd, cpu),
  * select_task_rq extra args, rcu_read_lock around idle_get_state.
  */
+#include <linux/sysctl.h>
 /**
  * DOC: Capacity Aware Superset Scheduler (CASS) description
  *
@@ -137,6 +138,8 @@ static __always_inline bool cass_prefer_high_cap(struct task_struct *p)
 	if (cass_boosted())
 		return true;
 	if (schedtune_prefer_high_cap(p))
+		return true;
+	if (schedtune_task_boost(p) > 0)
 		return true;
 	return per_task_boost(p) > TASK_BOOST_NONE;
 }
@@ -358,16 +361,59 @@ int sched_set_boost(int type)
 	if (type < -3 || type > 3)
 		return -EINVAL;
 
-	if (type > 0)
+	/* 1 = global Gold. 2/3 are per-task via stune.boost. */
+	if (type == 1)
 		atomic_inc(&cass_boost_count);
-	else if (type < 0)
+	else if (type == -1)
 		atomic_add_unless(&cass_boost_count, -1, 0);
-	else
+	else if (type == 0)
 		atomic_set(&cass_boost_count, 0);
 
 	return 0;
 }
 EXPORT_SYMBOL_GPL(sched_set_boost);
+
+#ifdef CONFIG_SYSCTL
+static int sysctl_sched_boost;
+static int cass_boost_min = -3;
+static int cass_boost_max = 3;
+
+static int cass_boost_sysctl(struct ctl_table *table, int write,
+			     void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int old = sysctl_sched_boost;
+	int ret;
+
+	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+	if (ret || !write)
+		return ret;
+
+	ret = sched_set_boost(sysctl_sched_boost);
+	if (ret)
+		sysctl_sched_boost = old;
+	return ret;
+}
+
+static struct ctl_table cass_kern_table[] = {
+	{
+		.procname	= "sched_boost",
+		.data		= &sysctl_sched_boost,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= cass_boost_sysctl,
+		.extra1		= &cass_boost_min,
+		.extra2		= &cass_boost_max,
+	},
+	{ }
+};
+
+static int __init cass_sysctl_init(void)
+{
+	register_sysctl("kernel", cass_kern_table);
+	return 0;
+}
+late_initcall(cass_sysctl_init);
+#endif
 
 static bool cass_can_migrate_task(struct task_struct *p, int src_cpu,
 				  int dst_cpu)

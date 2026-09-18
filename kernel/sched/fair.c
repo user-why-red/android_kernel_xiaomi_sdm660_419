@@ -3982,6 +3982,7 @@ static inline bool cass_task_fits_cpu(struct task_struct *p, int cpu)
 {
 	if (is_min_capacity_cpu(cpu) &&
 	    (schedtune_prefer_high_cap(p) ||
+	     schedtune_task_boost(p) > 0 ||
 	     per_task_boost(p) > TASK_BOOST_NONE))
 		return false;
 
