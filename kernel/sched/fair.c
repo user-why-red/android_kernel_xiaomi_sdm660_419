@@ -202,6 +202,13 @@ static inline unsigned long cass_cpu_fit_cap(int cpu)
 		return orig;
 	return capped;
 }
+
+static atomic_t cass_boost_count = ATOMIC_INIT(0);
+
+static inline bool cass_boosted(void)
+{
+	return atomic_read(&cass_boost_count) > 0;
+}
 #endif
 
 unsigned int sched_capacity_margin_up[CPU_NR] = {
@@ -4004,7 +4011,8 @@ static inline unsigned long cass_task_util(struct task_struct *p)
 static inline bool cass_task_fits_cpu(struct task_struct *p, int cpu)
 {
 	if (is_min_capacity_cpu(cpu) &&
-	    (schedtune_prefer_high_cap(p) ||
+	    (cass_boosted() ||
+	     schedtune_prefer_high_cap(p) ||
 	     per_task_boost(p) > TASK_BOOST_NONE))
 		return false;
 

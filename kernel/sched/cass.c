@@ -134,13 +134,7 @@ static __always_inline bool cass_prefer_idle(struct task_struct *p)
 	return wake_to_idle(p) || schedtune_prefer_idle(p);
 }
 
-static atomic_t cass_boost_count = ATOMIC_INIT(0);
 static DEFINE_SPINLOCK(cass_boost_lock);
-
-static __always_inline bool cass_boosted(void)
-{
-	return atomic_read(&cass_boost_count) > 0;
-}
 
 static __always_inline bool cass_prefer_high_cap(struct task_struct *p)
 {
