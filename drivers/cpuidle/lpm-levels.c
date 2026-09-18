@@ -675,9 +675,11 @@ static void register_cluster_lpm_stats(struct lpm_cluster *cl,
 
 	cl->stats = lpm_stats_config_level(cl->cluster_name, level_name,
 			cl->nlevels, parent ? parent->stats : NULL, NULL);
-	if (IS_ERR_OR_NULL(cl->stats))
-		pr_info("Cluster (%s) stats not registered\n",
+	if (IS_ERR(cl->stats))
+		pr_debug("Cluster (%s) stats not registered\n",
 			cl->cluster_name);
+	if (IS_ERR_OR_NULL(cl->stats))
+		cl->stats = NULL;
 
 	kfree(level_name);
 
