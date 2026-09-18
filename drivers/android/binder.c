@@ -4823,22 +4823,26 @@ retry:
 			trsize = sizeof(tr);
 		}
 		if (put_user(cmd, (uint32_t __user *)ptr)) {
+			struct binder_buffer *buffer = t->buffer;
+
 			if (t_from)
 				binder_thread_dec_tmpref(t_from);
-
+			buffer->transaction = NULL;
 			binder_cleanup_transaction(t, "put_user failed",
 						   BR_FAILED_REPLY);
-
+			binder_free_buf(proc, thread, buffer, false);
 			return -EFAULT;
 		}
 		ptr += sizeof(uint32_t);
 		if (copy_to_user(ptr, &tr, trsize)) {
+			struct binder_buffer *buffer = t->buffer;
+
 			if (t_from)
 				binder_thread_dec_tmpref(t_from);
-
+			buffer->transaction = NULL;
 			binder_cleanup_transaction(t, "copy_to_user failed",
 						   BR_FAILED_REPLY);
-
+			binder_free_buf(proc, thread, buffer, false);
 			return -EFAULT;
 		}
 		ptr += trsize;
