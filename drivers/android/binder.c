@@ -5598,9 +5598,22 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			if (ret >= 0)
 				ret = binder_ioctl_freeze(&info,
 							  target_procs[i]);
-
-			binder_proc_dec_tmpref(target_procs[i]);
+			if (ret < 0)
+				break;
 		}
+
+		if (ret < 0 && info.enable) {
+			struct binder_freeze_info thaw = {
+				.enable = 0,
+				.timeout_ms = 0,
+			};
+
+			while (i--)
+				binder_ioctl_freeze(&thaw, target_procs[i]);
+		}
+
+		for (i = 0; i < target_procs_count; i++)
+			binder_proc_dec_tmpref(target_procs[i]);
 
 		kfree(target_procs);
 
