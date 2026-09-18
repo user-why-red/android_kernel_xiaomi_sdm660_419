@@ -114,7 +114,7 @@
 /*
  * Request max frequency from schedutil whenever a RT task is running.
  */
-#define SCHED_FEAT_SUGOV_RT_MAX_FREQ 0
+#define SCHED_FEAT_SUGOV_RT_MAX_FREQ 1
 
 /*
  * Apply schedtune boost hold to tasks of all sched classes.
