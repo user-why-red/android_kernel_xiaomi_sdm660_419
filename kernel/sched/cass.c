@@ -150,7 +150,7 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 		     const struct cass_cpu_cand *b, unsigned long p_util,
 		     int this_cpu, int prev_cpu, bool sync,
 		     unsigned long uc_max, bool prefer_high_cap,
-		     bool prefer_idle)
+		     bool prefer_idle, bool is_fork)
 {
 #define cass_cmp(a, b) ({ res = (long)(a) - (long)(b); })
 #define cass_eq(a, b) ({ res = (a) == (b); })
@@ -169,7 +169,7 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 	 * smaller CPU would go over capacity, skip and let relative util
 	 * spill to Gold.
 	 */
-	if (!prefer_high_cap && !prefer_idle) {
+	if (!prefer_high_cap && !prefer_idle && !is_fork) {
 		bool pack = true;
 
 		if (sync &&
@@ -251,7 +251,8 @@ static int cass_fallback_cpu(struct task_struct *p, int prev_cpu)
 	return cpumask_first(&p->cpus_allowed);
 }
 
-static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
+static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync,
+			 bool is_fork)
 {
 	struct cass_cpu_cand cands[2], *best = cands;
 	int this_cpu = raw_smp_processor_id();
@@ -261,6 +262,8 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 	int cidx = 0, cpu;
 
 	p_util = task_util_est(p);
+	if (is_fork)
+		p_util = max(p_util, task_util_est(current));
 	uc_min = cass_uclamp_min(p);
 	uc_max = cass_uclamp_max(p);
 	prefer_idle = cass_prefer_idle(p);
@@ -308,7 +311,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 			 * must still rank busy Gold (scan is Silver-first).
 			 */
 			if (has_idle && !prefer_high_cap && !prefer_idle &&
-			    !uc_min &&
+			    !is_fork && !uc_min &&
 			    cass_fits_cap(max(p_util, uc_min), idle_cap))
 				continue;
 			curr->exit_lat = 0;
@@ -330,7 +333,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 		if (!have_best ||
 		    cass_cpu_better(curr, best, max(p_util, uc_min),
 				    this_cpu, prev_cpu, sync, uc_max,
-				    prefer_high_cap, prefer_idle)) {
+				    prefer_high_cap, prefer_idle, is_fork)) {
 			best = curr;
 			cidx ^= 1;
 			have_best = true;
@@ -363,7 +366,7 @@ static int cass_select_task_rq(struct task_struct *p, int prev_cpu,
 
 	sync = (wake_flags & WF_SYNC) && !(current->flags & PF_EXITING);
 
-	return cass_best_cpu(p, prev_cpu, sync);
+	return cass_best_cpu(p, prev_cpu, sync, sd_flag & SD_BALANCE_FORK);
 }
 
 static int cass_select_task_rq_fair(struct task_struct *p, int prev_cpu,
