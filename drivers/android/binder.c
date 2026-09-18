@@ -5582,6 +5582,8 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		hlist_for_each_entry(target_proc, &binder_procs, proc_node) {
 			if (target_proc->pid != info.pid)
 				continue;
+			if (i == target_procs_count)
+				break;
 
 			binder_inner_proc_lock(target_proc);
 			target_proc->tmp_ref++;
@@ -5590,6 +5592,7 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			target_procs[i++] = target_proc;
 		}
 		mutex_unlock(&binder_procs_lock);
+		target_procs_count = i;
 
 		for (i = 0; i < target_procs_count; i++) {
 			if (ret >= 0)
