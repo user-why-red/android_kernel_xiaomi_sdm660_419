@@ -151,8 +151,6 @@ static __always_inline bool cass_prefer_high_cap(struct task_struct *p)
 		return true;
 	if (schedtune_prefer_high_cap(p))
 		return true;
-	if (schedtune_task_boost(p) > 0)
-		return true;
 	return per_task_boost(p) > TASK_BOOST_NONE;
 }
 
