@@ -278,10 +278,6 @@ unsigned long schedutil_cpu_util(int cpu, unsigned long util_cfs,
 	unsigned long dl_util, util, irq;
 	struct rq *rq = cpu_rq(cpu);
 
-	if (sched_feat(SUGOV_RT_MAX_FREQ) &&
-	    type == FREQUENCY_UTIL && rt_rq_is_runnable(&rq->rt)) {
-		return max;
-	}
 
 	/*
 	 * Early check to see if IRQ/steal time saturates the CPU, can be
@@ -312,6 +308,11 @@ unsigned long schedutil_cpu_util(int cpu, unsigned long util_cfs,
 #endif
 		if (sched_boost_uclamp())
 			util = uclamp_rq_util_with(rq, util, p);
+		/* Floor so RT does not sit on min OPP. Do not pin a
+		 * shared 4-CPU policy at fmax.
+		 */
+		if (sched_feat(SUGOV_RT_MAX_FREQ) && rt_rq_is_runnable(&rq->rt))
+			util = max(util, max >> 1);
 	}
 
 	dl_util = cpu_util_dl(rq);
