@@ -39,10 +39,21 @@ static __always_inline unsigned long cass_thermal_load(struct rq *rq)
 	unsigned long orig = cass_cap_orig(cpu);
 	unsigned long scale = arch_scale_max_freq_capacity(NULL, cpu);
 	unsigned long capped = orig * scale / SCHED_CAPACITY_SCALE;
+	unsigned long rq_cap = capacity_orig_of(cpu);
 
+	if (rq_cap && rq_cap < capped)
+		capped = rq_cap;
 	if (capped >= orig)
 		return 0;
 	return orig - capped;
+}
+
+static __always_inline unsigned long cass_cpu_cap_max(int cpu)
+{
+	unsigned long orig = cass_cap_orig(cpu);
+	unsigned long therm = cass_thermal_load(cpu_rq(cpu));
+
+	return orig - min(therm, orig - 1);
 }
 
 
@@ -173,8 +184,8 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 		bool pack = true;
 
 		if (sync &&
-		    ((a->cpu == this_cpu && a->cap_orig >= b->cap_orig) ||
-		     (b->cpu == this_cpu && b->cap_orig >= a->cap_orig)))
+		    ((a->cpu == this_cpu && a->cap_max >= b->cap_max) ||
+		     (b->cpu == this_cpu && b->cap_max >= a->cap_max)))
 			pack = false;
 
 		if (pack) {
@@ -183,7 +194,7 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 			bool b_fits = cass_fits_cap(p_util, b->cap_max) &&
 				      b->eff_util <= b->cap_max;
 
-			if (a_fits && b_fits && cass_cmp(b->cap_orig, a->cap_orig))
+			if (a_fits && b_fits && cass_cmp(b->cap_max, a->cap_max))
 				goto done;
 			if (a_fits != b_fits && cass_cmp(a_fits, b_fits))
 				goto done;
@@ -197,7 +208,7 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 		     a->eff_util * SCHED_CAPACITY_SCALE / max(a->cap_max, 1UL)))
 		goto done;
 
-	if (prefer_high_cap && cass_cmp(a->cap_orig, b->cap_orig))
+	if (prefer_high_cap && cass_cmp(a->cap_max, b->cap_max))
 		goto done;
 
 	if (cass_cmp(cass_fits_cap(p_util, a->cap_max),
@@ -447,8 +458,8 @@ static bool cass_can_migrate_task(struct task_struct *p, int src_cpu,
 	if (cpu_isolated(dst_cpu))
 		return false;
 
-	src_orig = cass_cap_orig(src_cpu);
-	dst_orig = cass_cap_orig(dst_cpu);
+	src_orig = cass_cpu_cap_max(src_cpu);
+	dst_orig = cass_cpu_cap_max(dst_cpu);
 	uc_min = cass_uclamp_min(p);
 	uc_max = cass_uclamp_max(p);
 
