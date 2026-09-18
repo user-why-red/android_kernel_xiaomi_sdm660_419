@@ -579,6 +579,22 @@ static int teo_select(struct cpuidle_driver *drv, struct cpuidle_device *dev,
 	}
 
 	/*
+	 * Util-awareness only shallows the state when the CPU
+	 * already has load. After a long idle, util is ~0 and TEO
+	 * still picks the deepest C-state. High exit latency misses
+	 * the next wakeup; cluster power-collapse also takes the
+	 * sibling CPUs down. Skip states above 300us.
+	 */
+	if (drv->states[idx].exit_latency > 300) {
+		i = idx;
+		while (i > 0 && (drv->states[i].exit_latency > 300 ||
+				 dev->states_usage[i].disable))
+			i--;
+		if (teo_state_ok(i, drv))
+			idx = i;
+	}
+
+	/*
 	 * Skip the timers check if state 0 is the current candidate one,
 	 * because an immediate non-timer wakeup is expected in that case.
 	 */
