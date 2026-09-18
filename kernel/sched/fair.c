@@ -5760,8 +5760,13 @@ static unsigned long capacity_of(int cpu);
 
 bool __cpu_overutilized(int cpu, int delta)
 {
+#ifdef CONFIG_SCHED_CASS
+	return !fits_capacity((cpu_util(cpu) + delta), cass_cpu_fit_cap(cpu),
+			      sched_capacity_margin_up[cpu]);
+#else
 	return !fits_capacity((cpu_util(cpu) + delta), capacity_orig_of(cpu),
 			      sched_capacity_margin_up[cpu]);
+#endif
 }
 
 bool cpu_overutilized(int cpu)
