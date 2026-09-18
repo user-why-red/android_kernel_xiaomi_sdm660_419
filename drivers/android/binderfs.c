@@ -402,7 +402,7 @@ static const struct file_operations binder_ctl_fops = {
  */
 static int binderfs_binder_ctl_create(struct super_block *sb)
 {
-	int minor, ret;
+	int minor = -1, ret;
 	struct dentry *dentry;
 	struct binder_device *device;
 	struct inode *inode = NULL;
@@ -464,6 +464,11 @@ static int binderfs_binder_ctl_create(struct super_block *sb)
 	return 0;
 
 out:
+	if (minor >= 0) {
+		mutex_lock(&binderfs_minors_mutex);
+		ida_free(&binderfs_minors, minor);
+		mutex_unlock(&binderfs_minors_mutex);
+	}
 	kfree(device);
 	iput(inode);
 
