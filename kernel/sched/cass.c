@@ -145,7 +145,8 @@ static __always_inline
 bool cass_cpu_better(const struct cass_cpu_cand *a,
 		     const struct cass_cpu_cand *b, unsigned long p_util,
 		     int this_cpu, int prev_cpu, bool sync,
-		     unsigned long uc_max, bool prefer_high_cap)
+		     unsigned long uc_max, bool prefer_high_cap,
+		     bool prefer_idle)
 {
 #define cass_cmp(a, b) ({ res = (long)(a) - (long)(b); })
 #define cass_eq(a, b) ({ res = (a) == (b); })
@@ -164,16 +165,25 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 	 * smaller CPU would go over capacity, skip and let relative util
 	 * spill to Gold.
 	 */
-	if (!prefer_high_cap) {
-		bool a_fits = fits_capacity(p_util, a->cap_max, 1280) &&
-			      a->eff_util <= a->cap_max;
-		bool b_fits = fits_capacity(p_util, b->cap_max, 1280) &&
-			      b->eff_util <= b->cap_max;
+	if (!prefer_high_cap && !prefer_idle) {
+		bool pack = true;
 
-		if (a_fits && b_fits && cass_cmp(b->cap_orig, a->cap_orig))
-			goto done;
-		if (a_fits != b_fits && cass_cmp(a_fits, b_fits))
-			goto done;
+		if (sync &&
+		    ((a->cpu == this_cpu && a->cap_orig >= b->cap_orig) ||
+		     (b->cpu == this_cpu && b->cap_orig >= a->cap_orig)))
+			pack = false;
+
+		if (pack) {
+			bool a_fits = fits_capacity(p_util, a->cap_max, 1280) &&
+				      a->eff_util <= a->cap_max;
+			bool b_fits = fits_capacity(p_util, b->cap_max, 1280) &&
+				      b->eff_util <= b->cap_max;
+
+			if (a_fits && b_fits && cass_cmp(b->cap_orig, a->cap_orig))
+				goto done;
+			if (a_fits != b_fits && cass_cmp(a_fits, b_fits))
+				goto done;
+		}
 	}
 
 	/* Relative util, fixed-point. Integer div truncated this to 0/0
@@ -222,7 +232,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 {
 	struct cass_cpu_cand cands[2], *best = cands;
 	int this_cpu = raw_smp_processor_id();
-	unsigned long p_util, uc_min, uc_max;
+	unsigned long p_util, uc_min, uc_max, idle_cap = 0;
 	bool has_idle = false, have_best = false;
 	bool prefer_idle, prefer_high_cap;
 	int cidx = 0, cpu;
@@ -258,14 +268,25 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 		curr->cpu = cpu;
 		if ((sync && cpu == this_cpu && rq->nr_running == 1) ||
 		    available_idle_cpu(cpu) || sched_idle_cpu(cpu)) {
-			if (prefer_idle || (!uc_min && !cass_prime_cpu(curr)))
+			if (prefer_idle || (!uc_min && !cass_prime_cpu(curr))) {
 				has_idle = true;
+				if (curr->cap_max > idle_cap)
+					idle_cap = curr->cap_max;
+			}
 			curr->exit_lat = 1;
 			idle_state = idle_get_state(rq);
 			if (idle_state)
 				curr->exit_lat += idle_state->exit_latency;
 		} else {
-			if (has_idle)
+			/*
+			 * Have an idle candidate: skip busy CPUs only for
+			 * unhinted tasks that still fit that idle CPU.
+			 * prefer_idle / prefer_high_cap / uclamp.min / misfit
+			 * must still rank busy Gold (scan is Silver-first).
+			 */
+			if (has_idle && !prefer_high_cap && !prefer_idle &&
+			    !uc_min &&
+			    fits_capacity(max(p_util, uc_min), idle_cap, 1280))
 				continue;
 			curr->exit_lat = 0;
 		}
@@ -286,7 +307,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 		if (!have_best ||
 		    cass_cpu_better(curr, best, max(p_util, uc_min),
 				    this_cpu, prev_cpu, sync, uc_max,
-				    prefer_high_cap)) {
+				    prefer_high_cap, prefer_idle)) {
 			best = curr;
 			cidx ^= 1;
 			have_best = true;
