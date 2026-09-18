@@ -497,6 +497,16 @@ static void sugov_iowait_apply(struct sugov_cpu *sg_cpu, u64 time,
 	boost = (sg_cpu->iowait_boost * (*max)) >> SCHED_CAPACITY_SHIFT;
 	if (*util < boost)
 		*util = boost;
+
+#ifdef CONFIG_UCLAMP_TASK
+	if (sched_boost_uclamp() && uclamp_is_used()) {
+		unsigned long uc_max;
+
+		uc_max = READ_ONCE(cpu_rq(sg_cpu->cpu)->uclamp[UCLAMP_MAX].value);
+		if (*util > uc_max)
+			*util = uc_max;
+	}
+#endif
 }
 
 static void sugov_update_single(struct update_util_data *hook, u64 time,
