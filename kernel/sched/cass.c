@@ -372,13 +372,14 @@ EXPORT_SYMBOL_GPL(sched_set_boost);
 static bool cass_can_migrate_task(struct task_struct *p, int src_cpu,
 				  int dst_cpu)
 {
-	unsigned long uc_max, src_orig, dst_orig;
+	unsigned long uc_min, uc_max, src_orig, dst_orig;
 
 	if (cpu_isolated(dst_cpu))
 		return false;
 
 	src_orig = cass_cap_orig(src_cpu);
 	dst_orig = cass_cap_orig(dst_cpu);
+	uc_min = cass_uclamp_min(p);
 	uc_max = cass_uclamp_max(p);
 
 	/* Don't pull a clamped task onto a CPU wakeup would reject. */
@@ -386,8 +387,22 @@ static bool cass_can_migrate_task(struct task_struct *p, int src_cpu,
 	    src_orig <= uc_max && dst_orig > uc_max)
 		return false;
 
+	if (uc_min && dst_orig < uc_min)
+		return false;
+
 	/* Boosted / prefer_high_cap stays on the bigger CPU. */
-	if (cass_prefer_high_cap(p) && dst_orig < src_orig)
+	if ((cass_prefer_high_cap(p) || cass_prefer_idle(p)) &&
+	    dst_orig < src_orig)
+		return false;
+
+	if (dst_orig < src_orig && !cass_task_fits_cpu(p, dst_cpu))
+		return false;
+
+	/* Packed background stays on Silver unless src is in trouble. */
+	if (dst_orig > src_orig &&
+	    !cass_prefer_high_cap(p) && !cass_prefer_idle(p) &&
+	    cass_task_fits_cpu(p, src_cpu) &&
+	    !cpu_overutilized(src_cpu))
 		return false;
 
 	return true;

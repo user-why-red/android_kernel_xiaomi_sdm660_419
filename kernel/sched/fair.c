@@ -11122,6 +11122,14 @@ static int need_active_balance(struct lb_env *env)
 {
 	struct sched_domain *sd = env->sd;
 
+#ifdef CONFIG_SCHED_CASS
+	if (env->src_rq->curr &&
+	    env->src_rq->curr->sched_class == &fair_sched_class &&
+	    !cass_can_migrate_task(env->src_rq->curr, env->src_cpu,
+				   env->dst_cpu))
+		return 0;
+#endif
+
 	if (voluntary_active_balance(env))
 		return 1;
 
@@ -13406,6 +13414,11 @@ kick_active_balance(struct rq *rq, struct task_struct *p, int new_cpu)
 {
 	unsigned long flags;
 	int rc = 0;
+
+#ifdef CONFIG_SCHED_CASS
+	if (!cass_can_migrate_task(p, cpu_of(rq), new_cpu))
+		return 0;
+#endif
 
 	/* Invoke active balance to force migrate currently running task */
 	raw_spin_lock_irqsave(&rq->lock, flags);
