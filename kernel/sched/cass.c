@@ -127,6 +127,7 @@ static __always_inline bool cass_prefer_idle(struct task_struct *p)
 }
 
 static atomic_t cass_boost_count = ATOMIC_INIT(0);
+static DEFINE_SPINLOCK(cass_boost_lock);
 
 static __always_inline bool cass_boosted(void)
 {
@@ -358,9 +359,12 @@ static int cass_select_task_rq_fair(struct task_struct *p, int prev_cpu,
 
 int sched_set_boost(int type)
 {
+	unsigned long flags;
+
 	if (type < -3 || type > 3)
 		return -EINVAL;
 
+	spin_lock_irqsave(&cass_boost_lock, flags);
 	/* 1 = global Gold. 2/3 are per-task via stune.boost. */
 	if (type == 1)
 		atomic_inc(&cass_boost_count);
@@ -368,6 +372,7 @@ int sched_set_boost(int type)
 		atomic_add_unless(&cass_boost_count, -1, 0);
 	else if (type == 0)
 		atomic_set(&cass_boost_count, 0);
+	spin_unlock_irqrestore(&cass_boost_lock, flags);
 
 	return 0;
 }
