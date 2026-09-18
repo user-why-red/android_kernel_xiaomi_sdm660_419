@@ -3118,8 +3118,6 @@ static void binder_transaction(struct binder_proc *proc,
 			return_error = BR_FAILED_REPLY;
 			return_error_param = -EPROTO;
 			return_error_line = __LINE__;
-			in_reply_to = NULL;
-			target_thread = NULL;
 			goto err_dead_binder;
 		}
 		target_proc = target_thread->proc;
