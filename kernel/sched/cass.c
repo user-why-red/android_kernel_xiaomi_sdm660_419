@@ -33,21 +33,6 @@ static __always_inline unsigned long cass_cap_orig(int cpu)
 	return arch_scale_cpu_capacity(NULL, cpu);
 }
 
-static __always_inline unsigned long cass_thermal_load(struct rq *rq)
-{
-	int cpu = cpu_of(rq);
-	unsigned long orig = cass_cap_orig(cpu);
-	unsigned long scale = arch_scale_max_freq_capacity(NULL, cpu);
-	unsigned long capped = orig * scale / SCHED_CAPACITY_SCALE;
-	unsigned long rq_cap = capacity_orig_of(cpu);
-
-	if (rq_cap && rq_cap < capped)
-		capped = rq_cap;
-	if (capped >= orig)
-		return 0;
-	return orig - capped;
-}
-
 static __always_inline unsigned long cass_cpu_cap_max(int cpu)
 {
 	return cass_cpu_fit_cap(cpu);
@@ -279,8 +264,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync,
 			continue;
 
 		curr->cap_orig = cass_cap_orig(cpu);
-		curr->cap_max = curr->cap_orig - min(cass_thermal_load(rq),
-						     curr->cap_orig - 1);
+		curr->cap_max = cass_cpu_fit_cap(cpu);
 
 		/*
 		 * Skip thermally insufficient CPUs only after we have a
