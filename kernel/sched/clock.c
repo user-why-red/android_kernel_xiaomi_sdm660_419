@@ -217,6 +217,7 @@ void __init sched_clock_init(void)
 	local_irq_enable();
 
 	static_branch_inc(&sched_clock_running);
+	enable_sched_clock_irqtime();
 }
 /*
  * We run this as late_initcall() such that it runs after all built-in drivers,
@@ -455,6 +456,7 @@ void __init sched_clock_init(void)
 	local_irq_disable();
 	generic_sched_clock_init();
 	local_irq_enable();
+	enable_sched_clock_irqtime();
 }
 
 u64 sched_clock_cpu(int cpu)
