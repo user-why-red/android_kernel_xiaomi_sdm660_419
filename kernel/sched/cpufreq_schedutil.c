@@ -12,6 +12,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include "sched.h"
+#include <linux/sched/boost_src.h>
 
 #include <linux/sched/cpufreq.h>
 #include <trace/events/power.h>
@@ -320,9 +321,11 @@ unsigned long schedutil_cpu_util(int cpu, unsigned long util_cfs,
 	util = util_cfs + cpu_util_rt(rq);
 	if (type == FREQUENCY_UTIL) {
 #ifdef CONFIG_SCHED_TUNE
-		util += schedtune_cpu_margin_with(util, cpu, p);
+		if (sched_boost_stune())
+			util += schedtune_cpu_margin_with(util, cpu, p);
 #endif
-		util = uclamp_rq_util_with(rq, util, p);
+		if (sched_boost_uclamp())
+			util = uclamp_rq_util_with(rq, util, p);
 	}
 
 	dl_util = cpu_util_dl(rq);
