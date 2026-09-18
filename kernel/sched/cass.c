@@ -368,12 +368,10 @@ int sched_set_boost(int type)
 		return -EINVAL;
 
 	spin_lock_irqsave(&cass_boost_lock, flags);
-	/* 1 = global Gold. 2/3 are per-task via stune.boost. */
+	/* 1 = on, 0/-1 = off. 2/3 are stune, not a refcount. */
 	if (type == 1)
-		atomic_inc(&cass_boost_count);
-	else if (type == -1)
-		atomic_add_unless(&cass_boost_count, -1, 0);
-	else if (type == 0)
+		atomic_set(&cass_boost_count, 1);
+	else if (type == 0 || type == -1)
 		atomic_set(&cass_boost_count, 0);
 	spin_unlock_irqrestore(&cass_boost_lock, flags);
 
