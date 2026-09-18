@@ -9334,8 +9334,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 #ifdef CONFIG_SCHED_CASS
 	if (!cass_can_migrate_task(p, env->src_cpu, env->dst_cpu))
 		return 0;
-#endif
-
+#else
 	if (static_branch_unlikely(&sched_energy_present)) {
 		struct root_domain *rd = env->dst_rq->rd;
 
@@ -9353,6 +9352,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 				return 0;
 		}
 	}
+#endif
 
 #ifdef CONFIG_SCHED_WALT
 	if (env->flags & LBF_IGNORE_PREFERRED_CLUSTER_TASKS &&
