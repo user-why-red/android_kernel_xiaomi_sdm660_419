@@ -425,6 +425,8 @@ void schedtune_enqueue_task(struct task_struct *p, int cpu)
 	raw_spin_lock_irqsave(&bg->lock, irq_flags);
 
 	idx = p->stune_idx;
+	if (unlikely((unsigned int)idx >= BOOSTGROUPS_COUNT))
+		idx = 0;
 
 	schedtune_tasks_update(p, cpu, idx, ENQUEUE_TASK);
 
@@ -509,6 +511,8 @@ void schedtune_dequeue_task(struct task_struct *p, int cpu)
 	raw_spin_lock_irqsave(&bg->lock, irq_flags);
 
 	idx = p->stune_idx;
+	if (unlikely((unsigned int)idx >= BOOSTGROUPS_COUNT))
+		idx = 0;
 
 	schedtune_tasks_update(p, cpu, idx, DEQUEUE_TASK);
 
@@ -679,6 +683,8 @@ static void schedtune_attach(struct cgroup_taskset *tset)
 
 		dst_idx = task_schedtune(task)->idx;
 		src_idx = task->stune_idx;
+		if (unlikely((unsigned int)src_idx >= BOOSTGROUPS_COUNT))
+			src_idx = 0;
 
 		/*
 		 * Current task is not changing boostgroup, which can
@@ -772,14 +778,18 @@ static void
 schedtune_boostgroup_init(struct schedtune *st, int idx)
 {
 	struct boost_groups *bg;
+	unsigned long irq_flags;
 	int cpu;
 
 	/* Initialize per CPUs boost group support */
 	for_each_possible_cpu(cpu) {
 		bg = &per_cpu(cpu_boost_groups, cpu);
+		raw_spin_lock_irqsave(&bg->lock, irq_flags);
 		bg->group[idx].boost = 0;
 		bg->group[idx].valid = true;
 		bg->group[idx].ts = 0;
+		bg->group[idx].tasks = 0;
+		raw_spin_unlock_irqrestore(&bg->lock, irq_flags);
 	}
 
 	/* Keep track of allocated boost groups */
@@ -830,17 +840,24 @@ static void
 schedtune_boostgroup_release(struct schedtune *st)
 {
 	struct boost_groups *bg;
+	unsigned long irq_flags;
 	int cpu;
+	int idx = st->idx;
 
 	/* Reset per CPUs boost group support */
 	for_each_possible_cpu(cpu) {
 		bg = &per_cpu(cpu_boost_groups, cpu);
-		bg->group[st->idx].valid = false;
-		bg->group[st->idx].boost = 0;
+		raw_spin_lock_irqsave(&bg->lock, irq_flags);
+		bg->group[idx].valid = false;
+		bg->group[idx].boost = 0;
+		bg->group[idx].tasks = 0;
+		bg->group[idx].ts = 0;
+		schedtune_cpu_update(cpu, sched_clock_cpu(cpu));
+		raw_spin_unlock_irqrestore(&bg->lock, irq_flags);
 	}
 
 	/* Keep track of allocated boost groups */
-	allocated_group[st->idx] = NULL;
+	allocated_group[idx] = NULL;
 }
 
 static void

@@ -3246,14 +3246,18 @@ static inline void cfs_rq_util_change(struct cfs_rq *cfs_rq, int flags)
 
 static inline int per_task_boost(struct task_struct *p)
 {
-	if (p->boost_period) {
-		if (sched_clock() > p->boost_expires) {
-			p->boost_period = 0;
-			p->boost_expires = 0;
-			p->boost = 0;
+	if (!READ_ONCE(p->boost_period))
+		return 0;
+
+	if (sched_clock() > READ_ONCE(p->boost_expires)) {
+		if (p == current) {
+			WRITE_ONCE(p->boost, 0);
+			WRITE_ONCE(p->boost_period, 0);
+			WRITE_ONCE(p->boost_expires, 0);
 		}
+		return 0;
 	}
-	return p->boost;
+	return READ_ONCE(p->boost);
 }
 
 #ifdef CONFIG_SMP

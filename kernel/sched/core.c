@@ -9048,13 +9048,13 @@ int set_task_boost(int boost, u64 period)
 	if (boost) {
 		u64 ns = (u64)period * 1000 * 1000;
 
-		WRITE_ONCE(current->boost, boost);
-		WRITE_ONCE(current->boost_period, ns);
 		WRITE_ONCE(current->boost_expires, sched_clock() + ns);
+		WRITE_ONCE(current->boost_period, ns);
+		WRITE_ONCE(current->boost, boost);
 	} else {
 		WRITE_ONCE(current->boost, 0);
-		WRITE_ONCE(current->boost_expires, 0);
 		WRITE_ONCE(current->boost_period, 0);
+		WRITE_ONCE(current->boost_expires, 0);
 	}
 	return 0;
 }
