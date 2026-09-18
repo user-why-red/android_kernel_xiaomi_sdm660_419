@@ -174,9 +174,9 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 			pack = false;
 
 		if (pack) {
-			bool a_fits = fits_capacity(p_util, a->cap_max, 1280) &&
+			bool a_fits = cass_fits_cap(p_util, a->cap_max) &&
 				      a->eff_util <= a->cap_max;
-			bool b_fits = fits_capacity(p_util, b->cap_max, 1280) &&
+			bool b_fits = cass_fits_cap(p_util, b->cap_max) &&
 				      b->eff_util <= b->cap_max;
 
 			if (a_fits && b_fits && cass_cmp(b->cap_orig, a->cap_orig))
@@ -196,8 +196,8 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 	if (prefer_high_cap && cass_cmp(a->cap_orig, b->cap_orig))
 		goto done;
 
-	if (cass_cmp(fits_capacity(p_util, a->cap_max, 1280),
-		     fits_capacity(p_util, b->cap_max, 1280)))
+	if (cass_cmp(cass_fits_cap(p_util, a->cap_max),
+		     cass_fits_cap(p_util, b->cap_max)))
 		goto done;
 
 	if (cass_cmp(cass_prime_cpu(b), cass_prime_cpu(a)))
@@ -286,7 +286,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 			 */
 			if (has_idle && !prefer_high_cap && !prefer_idle &&
 			    !uc_min &&
-			    fits_capacity(max(p_util, uc_min), idle_cap, 1280))
+			    cass_fits_cap(max(p_util, uc_min), idle_cap))
 				continue;
 			curr->exit_lat = 0;
 		}

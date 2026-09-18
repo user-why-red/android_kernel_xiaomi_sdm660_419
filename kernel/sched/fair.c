@@ -175,6 +175,16 @@ unsigned int sysctl_sched_cfs_bandwidth_slice		= 5000UL;
  */
 #define fits_capacity(cap, max, margin)	((cap) * margin < (max) * 1024)
 
+#ifdef CONFIG_SCHED_CASS
+/* Same ~20% headroom CASS wakeup uses. Not the 5%/72% EAS arrays. */
+#define CASS_FIT_MARGIN	1280
+
+static inline bool cass_fits_cap(unsigned long util, unsigned long cap)
+{
+	return fits_capacity(util, cap, CASS_FIT_MARGIN);
+}
+#endif
+
 unsigned int sched_capacity_margin_up[CPU_NR] = {
 			[0 ... CPU_NR-1] = 1078}; /* ~5% margin */
 unsigned int sched_capacity_margin_down[CPU_NR] = {
@@ -3956,6 +3966,29 @@ static inline unsigned long uclamp_task_util(struct task_struct *p)
 }
 #endif
 
+#ifdef CONFIG_SCHED_CASS
+static inline unsigned long cass_task_util(struct task_struct *p)
+{
+	unsigned long util = task_util_est(p);
+
+#ifdef CONFIG_UCLAMP_TASK
+	if (uclamp_is_used())
+		util = max(util, (unsigned long)uclamp_eff_value(p, UCLAMP_MIN));
+#endif
+	return util;
+}
+
+static inline bool cass_task_fits_cpu(struct task_struct *p, int cpu)
+{
+	if (is_min_capacity_cpu(cpu) &&
+	    (schedtune_prefer_high_cap(p) ||
+	     per_task_boost(p) > TASK_BOOST_NONE))
+		return false;
+
+	return cass_fits_cap(cass_task_util(p), capacity_orig_of(cpu));
+}
+#endif
+
 static inline void util_est_enqueue(struct cfs_rq *cfs_rq,
 				    struct task_struct *p)
 {
@@ -4258,10 +4291,22 @@ static inline void update_misfit_status(struct task_struct *p, struct rq *rq)
 		return;
 	}
 
+#ifdef CONFIG_SCHED_CASS
+	/*
+	 * Same util+margin as CASS wakeup. task_fits_max() uses stune
+	 * 72% on Silver and 5% elsewhere, which marked CASS-packed
+	 * tasks misfit (or missed real misfits) and bounced Silver <-> Gold.
+	 */
+	if (cass_task_fits_cpu(p, cpu_of(rq))) {
+		rq->misfit_task_load = 0;
+		return;
+	}
+#else
 	if (task_fits_max(p, cpu_of(rq))) {
 		rq->misfit_task_load = 0;
 		return;
 	}
+#endif
 
 	rq->misfit_task_load = task_h_load(p);
 }
@@ -11966,12 +12011,14 @@ static void nohz_balancer_kick(struct rq *rq)
 
 	/*
 	 * With EAS, no-hz idle balance is allowed only when the CPU
-	 * is overutilized and has 2 tasks. The misfit task migration
-	 * happens from the tickpath.
+	 * is overutilized and has 2 tasks. Misfit used to migrate
+	 * from the WALT tickpath (check_for_migration), which is
+	 * compiled out. Kick idle Gold for a single misfit as well.
 	 */
 	if (static_branch_likely(&sched_energy_present)) {
-		if (rq->nr_running >= 2 && (cpu_overutilized(cpu) ||
-			prefer_spread_on_idle(cpu, false)))
+		if (rq->misfit_task_load ||
+		    (rq->nr_running >= 2 && (cpu_overutilized(cpu) ||
+			prefer_spread_on_idle(cpu, false))))
 			flags = NOHZ_KICK_MASK;
 		goto out;
 	}
