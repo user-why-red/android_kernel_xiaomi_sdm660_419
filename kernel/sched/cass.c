@@ -232,6 +232,25 @@ done:
 	return res > 0;
 }
 
+static int cass_fallback_cpu(struct task_struct *p, int prev_cpu)
+{
+	int cpu;
+
+	if (cpumask_test_cpu(prev_cpu, &p->cpus_allowed) &&
+	    cpu_active(prev_cpu) && !cpu_isolated(prev_cpu))
+		return prev_cpu;
+
+	for_each_cpu_and(cpu, &p->cpus_allowed, cpu_active_mask)
+		if (!cpu_isolated(cpu))
+			return cpu;
+
+	cpu = cpumask_any_and(&p->cpus_allowed, cpu_online_mask);
+	if (cpu < nr_cpu_ids)
+		return cpu;
+
+	return cpumask_first(&p->cpus_allowed);
+}
+
 static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 {
 	struct cass_cpu_cand cands[2], *best = cands;
@@ -319,11 +338,8 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync)
 	}
 	rcu_read_unlock();
 
-	if (unlikely(!have_best)) {
-		if (cpumask_test_cpu(prev_cpu, &p->cpus_allowed))
-			return prev_cpu;
-		return cpumask_first(&p->cpus_allowed);
-	}
+	if (unlikely(!have_best))
+		return cass_fallback_cpu(p, prev_cpu);
 
 	return best->cpu;
 }
@@ -340,7 +356,7 @@ static int cass_select_task_rq(struct task_struct *p, int prev_cpu,
 		return prev_cpu;
 
 	if (unlikely(!cpumask_intersects(&p->cpus_allowed, cpu_active_mask)))
-		return cpumask_first(&p->cpus_allowed);
+		return cass_fallback_cpu(p, prev_cpu);
 
 	if (!(sd_flag & SD_BALANCE_FORK))
 		sync_entity_load_avg(&p->se);
