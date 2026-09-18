@@ -183,6 +183,25 @@ static inline bool cass_fits_cap(unsigned long util, unsigned long cap)
 {
 	return fits_capacity(util, cap, CASS_FIT_MARGIN);
 }
+
+/* Thermal-clipped orig capacity. Wakeup, misfit, and migrate
+ * must use this; capacity_orig_of() is the uncapped value.
+ */
+static inline unsigned long cass_cpu_fit_cap(int cpu)
+{
+	unsigned long orig = arch_scale_cpu_capacity(NULL, cpu);
+	unsigned long scale = arch_scale_max_freq_capacity(NULL, cpu);
+	unsigned long capped = orig * scale / SCHED_CAPACITY_SCALE;
+	unsigned long rq_cap = capacity_orig_of(cpu);
+
+	if (rq_cap && rq_cap < capped)
+		capped = rq_cap;
+	if (!capped)
+		capped = 1;
+	if (capped > orig)
+		return orig;
+	return capped;
+}
 #endif
 
 unsigned int sched_capacity_margin_up[CPU_NR] = {
@@ -3989,7 +4008,7 @@ static inline bool cass_task_fits_cpu(struct task_struct *p, int cpu)
 	     per_task_boost(p) > TASK_BOOST_NONE))
 		return false;
 
-	return cass_fits_cap(cass_task_util(p), capacity_orig_of(cpu));
+	return cass_fits_cap(cass_task_util(p), cass_cpu_fit_cap(cpu));
 }
 #endif
 

@@ -50,10 +50,7 @@ static __always_inline unsigned long cass_thermal_load(struct rq *rq)
 
 static __always_inline unsigned long cass_cpu_cap_max(int cpu)
 {
-	unsigned long orig = cass_cap_orig(cpu);
-	unsigned long therm = cass_thermal_load(cpu_rq(cpu));
-
-	return orig - min(therm, orig - 1);
+	return cass_cpu_fit_cap(cpu);
 }
 
 
