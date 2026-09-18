@@ -319,7 +319,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync,
 			 * prefer_idle / prefer_high_cap / uclamp.min / misfit
 			 * must still rank busy Gold (scan is Silver-first).
 			 */
-			if (has_idle && !prefer_high_cap && !prefer_idle &&
+			if (has_idle && !prefer_high_cap &&
 			    !is_fork && !uc_min &&
 			    cass_fits_cap(max(p_util, uc_min), idle_cap))
 				continue;
