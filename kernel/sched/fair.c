@@ -10849,7 +10849,12 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 	if (static_branch_unlikely(&sched_energy_present)) {
 		struct root_domain *rd = env->dst_rq->rd;
 
-		if (rcu_dereference(rd->pd) && !sd_overutilized(env->sd)) {
+		if (rcu_dereference(rd->pd) && !sd_overutilized(env->sd)
+#ifdef CONFIG_SCHED_CASS
+		    && !(sds.busiest &&
+			 sds.busiest_stat.group_type == group_misfit_task)
+#endif
+							) {
 			int cpu_local, cpu_busiest;
 			unsigned long capacity_local, capacity_busiest;
 
