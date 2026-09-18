@@ -2552,6 +2552,14 @@ void __dl_update(struct dl_bw *dl_b, s64 bw)
 
 
 #ifdef CONFIG_IRQ_TIME_ACCOUNTING
+void enable_sched_clock_irqtime(void);
+void disable_sched_clock_irqtime(void);
+#else
+static inline void enable_sched_clock_irqtime(void) {}
+static inline void disable_sched_clock_irqtime(void) {}
+#endif
+
+#ifdef CONFIG_IRQ_TIME_ACCOUNTING
 struct irqtime {
 	u64			total;
 	u64			tick_delta;
