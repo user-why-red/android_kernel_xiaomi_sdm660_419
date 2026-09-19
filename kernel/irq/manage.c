@@ -999,6 +999,8 @@ irq_thread_check_affinity(struct irq_desc *desc, struct irqaction *action)
 		const struct cpumask *m;
 
 		m = irq_data_get_effective_affinity_mask(&desc->irq_data);
+		if (cpumask_empty(m))
+			m = irq_data_get_affinity_mask(&desc->irq_data);
 		cpumask_copy(mask, m);
 	} else {
 		valid = false;
