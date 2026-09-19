@@ -240,8 +240,25 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 	if (!chip || !chip->irq_set_affinity)
 		return -EINVAL;
 
-	/* IRQs only run on the first CPU in the affinity mask; reflect that */
-	mask = cpumask_of(cpumask_first(mask));
+	/*
+	 * GIC is single-target. Walk the requested mask instead of
+	 * always programming CPU0 (cpumask_first of 0-7).
+	 */
+	{
+		static int spread = -1;
+		unsigned int cpu;
+
+		cpu = cpumask_next_and(spread, mask, cpu_online_mask);
+		if (cpu >= nr_cpu_ids)
+			cpu = cpumask_first_and(mask, cpu_online_mask);
+		if (cpu >= nr_cpu_ids)
+			cpu = force ? cpumask_first(mask) :
+			      cpumask_any(cpu_online_mask);
+		if (cpu >= nr_cpu_ids)
+			return -EINVAL;
+		spread = cpu;
+		mask = cpumask_of(cpu);
+	}
 	ret = chip->irq_set_affinity(data, mask, force);
 	switch (ret) {
 	case IRQ_SET_MASK_OK:
