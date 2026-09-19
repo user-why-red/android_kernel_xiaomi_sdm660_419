@@ -8663,10 +8663,31 @@ static unsigned long wakeup_gran(struct sched_entity *se)
  *  w(c, s3) =  1
  *
  */
+static void bore_wakeup_backstep(s64 *vdiff, struct sched_entity *se)
+{
+	struct task_struct *p;
+	u64 delta_exec, scaled;
+	u8 score;
+
+	if (!sched_bore || !entity_is_task(se))
+		return;
+	p = task_of(se);
+	score = bore_score(p);
+	if (!score || (p->flags & PF_KTHREAD) ||
+	    p->policy == SCHED_BATCH || p->policy == SCHED_IDLE)
+		return;
+
+	delta_exec = se->sum_exec_runtime - se->prev_sum_exec_runtime;
+	scaled = mul_u64_u32_shr(delta_exec, sched_prio_to_wmult[score], 22);
+	*vdiff += (s64)delta_exec - (s64)scaled;
+}
+
 static int
 wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se)
 {
 	s64 gran, vdiff = curr->vruntime - se->vruntime;
+
+	bore_wakeup_backstep(&vdiff, curr);
 
 	if (vdiff <= 0)
 		return -1;
