@@ -1640,6 +1640,10 @@ static void wake_nocb_gp(struct rcu_data *rdp, bool force,
 	struct rcu_data *rdp_gp = rdp->nocb_gp_rdp;
 
 	lockdep_assert_held(&rdp->nocb_lock);
+	if (!rdp_gp) {
+		rcu_nocb_unlock_irqrestore(rdp, flags);
+		return;
+	}
 	if (!READ_ONCE(rdp_gp->nocb_gp_kthread)) {
 		trace_rcu_nocb_wake(rcu_state.name, rdp->cpu,
 				    TPS("AlreadyAwake"));
@@ -2428,6 +2432,9 @@ static void show_rcu_nocb_state(struct rcu_data *rdp)
 	bool waslocked;
 	bool wastimer;
 	bool wassleep;
+
+	if (!rdp->nocb_gp_rdp)
+		return;
 
 	if (rdp->nocb_gp_rdp == rdp)
 		show_rcu_nocb_gp_state(rdp);
