@@ -967,6 +967,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	if (entity_is_task(curr)) {
 		struct task_struct *curtask = task_of(curr);
 
+		update_curr_bore(curtask, delta_exec);
 		trace_sched_stat_runtime(curtask, delta_exec, curr->vruntime);
 		cgroup_account_cputime(curtask, delta_exec);
 		account_group_exec_runtime(curtask, delta_exec);
@@ -5974,6 +5975,9 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	 */
 	schedtune_dequeue_task(p, cpu_of(rq));
 
+	if (task_sleep)
+		restart_burst_bore(p);
+
 	util_est_dequeue(&rq->cfs, p);
 
 	for_each_sched_entity(se) {
@@ -8953,8 +8957,10 @@ static void yield_task_fair(struct rq *rq)
 	/*
 	 * Are we the only task in the tree?
 	 */
-	if (unlikely(rq->nr_running == 1))
+	if (unlikely(rq->nr_running == 1)) {
+		restart_burst_bore(curr);
 		return;
+	}
 
 	clear_buddies(cfs_rq, se);
 
@@ -8971,6 +8977,7 @@ static void yield_task_fair(struct rq *rq)
 		 */
 		rq_clock_skip_update(rq);
 	}
+	restart_burst_bore(curr);
 
 	set_skip_buddy(se);
 }

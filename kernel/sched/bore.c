@@ -14,6 +14,88 @@ u32 __read_mostly sched_burst_penalty_offset = 24;
 u32 __read_mostly sched_burst_penalty_scale = 1280;
 u32 __read_mostly sched_burst_cache_lifetime = 60000000;
 
+#define BORE_MAX_PENALTY ((40U << 8) - 1)
+
+static u32 bore_log2p1(u64 v)
+{
+	int clz, exp;
+	u32 mant;
+
+	if (!v)
+		return 0;
+	clz = __builtin_clzll(v);
+	exp = 64 - clz;
+	mant = (u32)((v << clz) << 1 >> (64 - 8));
+	return (exp << 8) | mant;
+}
+
+static u32 calc_burst_penalty(u64 burst_time)
+{
+	u32 greed = bore_log2p1(burst_time);
+	u32 tolerance = sched_burst_penalty_offset << 8;
+	s32 diff = (s32)greed - (s32)tolerance;
+	u32 scaled;
+
+	if (diff < 0)
+		diff = 0;
+	scaled = (u32)diff * sched_burst_penalty_scale >> 10;
+	if (scaled > BORE_MAX_PENALTY)
+		scaled = BORE_MAX_PENALTY;
+	return scaled;
+}
+
+static u32 binary_smooth(u32 new, u32 old)
+{
+	s32 inc = (s32)new - (s32)old;
+
+	if (inc >= 0)
+		return old + ((u32)inc >> sched_burst_smoothness);
+	return new;
+}
+
+static void bore_set_penalty(struct task_struct *p)
+{
+	u16 pen;
+
+	if (p->flags & PF_KTHREAD) {
+		p->bore.penalty = 0;
+		return;
+	}
+	pen = p->bore.curr_penalty;
+	if (p->bore.prev_penalty > pen)
+		pen = p->bore.prev_penalty;
+	p->bore.penalty = pen;
+}
+
+void update_curr_bore(struct task_struct *p, u64 delta_exec)
+{
+	u32 curr;
+
+	if (!sched_bore)
+		return;
+
+	p->bore.burst_time += delta_exec;
+	curr = calc_burst_penalty(p->bore.burst_time);
+	p->bore.curr_penalty = curr;
+	if (curr <= p->bore.prev_penalty)
+		return;
+	bore_set_penalty(p);
+}
+
+void restart_burst_bore(struct task_struct *p)
+{
+	u32 smoothed;
+
+	if (!sched_bore)
+		return;
+
+	smoothed = binary_smooth(p->bore.curr_penalty, p->bore.prev_penalty);
+	p->bore.prev_penalty = smoothed;
+	p->bore.curr_penalty = 0;
+	p->bore.burst_time = 0;
+	bore_set_penalty(p);
+}
+
 void reset_task_bore(struct task_struct *p)
 {
 	memset(&p->bore, 0, sizeof(p->bore));
