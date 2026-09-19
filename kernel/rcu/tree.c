@@ -3303,8 +3303,6 @@ static inline bool queue_kfree_rcu_work(struct kfree_rcu_cpu *krcp)
 				krcp->head = NULL;
 			}
 
-			WRITE_ONCE(krcp->count, 0);
-
 			/*
 			 * One work is per one batch, so there are three
 			 * "free channels", the batch can handle. It can
@@ -3319,6 +3317,8 @@ static inline bool queue_kfree_rcu_work(struct kfree_rcu_cpu *krcp)
 		if (krcp->bkvhead[0] || krcp->bkvhead[1] || krcp->head)
 			repeat = true;
 	}
+	if (!repeat)
+		WRITE_ONCE(krcp->count, 0);
 
 	return !repeat;
 }
