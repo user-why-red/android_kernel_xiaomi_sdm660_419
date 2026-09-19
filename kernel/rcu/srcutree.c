@@ -472,18 +472,25 @@ static void srcu_gp_start(struct srcu_struct *ssp)
 }
 
 
+static void srcu_queue_cbs_work(struct srcu_data *sdp)
+{
+	if (!cpu_online(sdp->cpu) ||
+	    !queue_work_on(sdp->cpu, rcu_gp_wq, &sdp->work))
+		queue_work(rcu_gp_wq, &sdp->work);
+}
+
 static void srcu_delay_timer(struct timer_list *t)
 {
 	struct srcu_data *sdp = container_of(t, struct srcu_data, delay_work);
 
-	queue_work_on(sdp->cpu, rcu_gp_wq, &sdp->work);
+	srcu_queue_cbs_work(sdp);
 }
 
 static void srcu_queue_delayed_work_on(struct srcu_data *sdp,
 				       unsigned long delay)
 {
 	if (!delay) {
-		queue_work_on(sdp->cpu, rcu_gp_wq, &sdp->work);
+		srcu_queue_cbs_work(sdp);
 		return;
 	}
 
