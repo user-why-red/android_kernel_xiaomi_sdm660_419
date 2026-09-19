@@ -89,8 +89,10 @@ void check_irq_resend(struct irq_desc *desc)
 				 * retrigger the parent, otherwise we
 				 * do nothing.
 				 */
-				if (!desc->parent_irq)
+				if (!desc->parent_irq) {
+					desc->istate &= ~IRQS_REPLAY;
 					return;
+				}
 				irq = desc->parent_irq;
 			}
 			/* Set it pending and activate the softirq: */

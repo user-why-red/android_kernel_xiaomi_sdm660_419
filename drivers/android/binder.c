@@ -2968,7 +2968,8 @@ static int binder_proc_transaction(struct binder_transaction *t,
 		t_outdated->buffer = NULL;
 		buffer->transaction = NULL;
 		trace_binder_transaction_update_buffer_release(buffer);
-		binder_release_entire_buffer(proc, NULL, buffer, false);
+		binder_free_txn_fixups(t_outdated);
+		binder_release_entire_buffer(proc, NULL, buffer, true);
 		binder_alloc_free_buf(&proc->alloc, buffer);
 		kfree(t_outdated);
 		binder_stats_deleted(BINDER_STAT_TRANSACTION);
@@ -3117,8 +3118,6 @@ static void binder_transaction(struct binder_proc *proc,
 			return_error = BR_FAILED_REPLY;
 			return_error_param = -EPROTO;
 			return_error_line = __LINE__;
-			in_reply_to = NULL;
-			target_thread = NULL;
 			goto err_dead_binder;
 		}
 		target_proc = target_thread->proc;
@@ -4824,22 +4823,26 @@ retry:
 			trsize = sizeof(tr);
 		}
 		if (put_user(cmd, (uint32_t __user *)ptr)) {
+			struct binder_buffer *buffer = t->buffer;
+
 			if (t_from)
 				binder_thread_dec_tmpref(t_from);
-
+			buffer->transaction = NULL;
 			binder_cleanup_transaction(t, "put_user failed",
 						   BR_FAILED_REPLY);
-
+			binder_free_buf(proc, thread, buffer, false);
 			return -EFAULT;
 		}
 		ptr += sizeof(uint32_t);
 		if (copy_to_user(ptr, &tr, trsize)) {
+			struct binder_buffer *buffer = t->buffer;
+
 			if (t_from)
 				binder_thread_dec_tmpref(t_from);
-
+			buffer->transaction = NULL;
 			binder_cleanup_transaction(t, "copy_to_user failed",
 						   BR_FAILED_REPLY);
-
+			binder_free_buf(proc, thread, buffer, false);
 			return -EFAULT;
 		}
 		ptr += trsize;
@@ -4931,7 +4934,8 @@ static void binder_release_work(struct binder_proc *proc,
 				"undelivered TRANSACTION_ERROR: %u\n",
 				e->cmd);
 		} break;
-		case BINDER_WORK_TRANSACTION_COMPLETE: {
+		case BINDER_WORK_TRANSACTION_COMPLETE:
+		case BINDER_WORK_TRANSACTION_ONEWAY_SPAM_SUSPECT: {
 			binder_debug(BINDER_DEBUG_DEAD_TRANSACTION,
 				"undelivered TRANSACTION_COMPLETE\n");
 			kfree(w);
@@ -5582,6 +5586,8 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		hlist_for_each_entry(target_proc, &binder_procs, proc_node) {
 			if (target_proc->pid != info.pid)
 				continue;
+			if (i == target_procs_count)
+				break;
 
 			binder_inner_proc_lock(target_proc);
 			target_proc->tmp_ref++;
@@ -5590,14 +5596,28 @@ static long binder_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			target_procs[i++] = target_proc;
 		}
 		mutex_unlock(&binder_procs_lock);
+		target_procs_count = i;
 
 		for (i = 0; i < target_procs_count; i++) {
 			if (ret >= 0)
 				ret = binder_ioctl_freeze(&info,
 							  target_procs[i]);
-
-			binder_proc_dec_tmpref(target_procs[i]);
+			if (ret < 0)
+				break;
 		}
+
+		if (ret < 0 && info.enable) {
+			struct binder_freeze_info thaw = {
+				.enable = 0,
+				.timeout_ms = 0,
+			};
+
+			while (i--)
+				binder_ioctl_freeze(&thaw, target_procs[i]);
+		}
+
+		for (i = 0; i < target_procs_count; i++)
+			binder_proc_dec_tmpref(target_procs[i]);
 
 		kfree(target_procs);
 
@@ -5644,8 +5664,10 @@ err:
 	if (thread)
 		thread->looper_need_return = false;
 	wait_event_interruptible(binder_user_error_wait, binder_stop_on_user_error < 2);
-	if (ret && ret != -EINTR)
-		pr_info("%d:%d ioctl %x %lx returned %d\n", proc->pid, current->pid, cmd, arg, ret);
+	if (ret && ret != -EINTR && ret != -EAGAIN)
+		binder_debug(BINDER_DEBUG_USER_ERROR,
+			     "%d:%d ioctl %x %lx returned %d\n",
+			     proc->pid, current->pid, cmd, arg, ret);
 err_unlocked:
 	trace_binder_ioctl_done(ret);
 	return ret;

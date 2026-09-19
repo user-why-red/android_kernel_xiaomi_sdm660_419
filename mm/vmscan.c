@@ -6577,8 +6577,8 @@ static int kshrinkd(void *pgdat)
 			if (!atomic_long_read(&kshrinkd_waiters))
 				break;
 
-			/* Iterate down each possible priority and then wrap */
-			pri = (pri - 1) % (DEF_PRIORITY + 1);
+			/* 0-1 as unsigned is UINT_MAX % 13 == 8, not a wrap to 12. */
+			pri = pri ? pri - 1 : DEF_PRIORITY;
 		}
 	}
 	current->flags &= ~PF_KSWAPD;

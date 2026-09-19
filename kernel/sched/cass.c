@@ -33,27 +33,9 @@ static __always_inline unsigned long cass_cap_orig(int cpu)
 	return arch_scale_cpu_capacity(NULL, cpu);
 }
 
-static __always_inline unsigned long cass_thermal_load(struct rq *rq)
-{
-	int cpu = cpu_of(rq);
-	unsigned long orig = cass_cap_orig(cpu);
-	unsigned long scale = arch_scale_max_freq_capacity(NULL, cpu);
-	unsigned long capped = orig * scale / SCHED_CAPACITY_SCALE;
-	unsigned long rq_cap = capacity_orig_of(cpu);
-
-	if (rq_cap && rq_cap < capped)
-		capped = rq_cap;
-	if (capped >= orig)
-		return 0;
-	return orig - capped;
-}
-
 static __always_inline unsigned long cass_cpu_cap_max(int cpu)
 {
-	unsigned long orig = cass_cap_orig(cpu);
-	unsigned long therm = cass_thermal_load(cpu_rq(cpu));
-
-	return orig - min(therm, orig - 1);
+	return cass_cpu_fit_cap(cpu);
 }
 
 
@@ -137,13 +119,7 @@ static __always_inline bool cass_prefer_idle(struct task_struct *p)
 	return wake_to_idle(p) || schedtune_prefer_idle(p);
 }
 
-static atomic_t cass_boost_count = ATOMIC_INIT(0);
 static DEFINE_SPINLOCK(cass_boost_lock);
-
-static __always_inline bool cass_boosted(void)
-{
-	return atomic_read(&cass_boost_count) > 0;
-}
 
 static __always_inline bool cass_prefer_high_cap(struct task_struct *p)
 {
@@ -288,8 +264,7 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync,
 			continue;
 
 		curr->cap_orig = cass_cap_orig(cpu);
-		curr->cap_max = curr->cap_orig - min(cass_thermal_load(rq),
-						     curr->cap_orig - 1);
+		curr->cap_max = cass_cpu_fit_cap(cpu);
 
 		/*
 		 * Skip thermally insufficient CPUs only after we have a
@@ -393,12 +368,10 @@ int sched_set_boost(int type)
 		return -EINVAL;
 
 	spin_lock_irqsave(&cass_boost_lock, flags);
-	/* 1 = global Gold. 2/3 are per-task via stune.boost. */
+	/* 1 = on, 0/-1 = off. 2/3 are stune, not a refcount. */
 	if (type == 1)
-		atomic_inc(&cass_boost_count);
-	else if (type == -1)
-		atomic_add_unless(&cass_boost_count, -1, 0);
-	else if (type == 0)
+		atomic_set(&cass_boost_count, 1);
+	else if (type == 0 || type == -1)
 		atomic_set(&cass_boost_count, 0);
 	spin_unlock_irqrestore(&cass_boost_lock, flags);
 

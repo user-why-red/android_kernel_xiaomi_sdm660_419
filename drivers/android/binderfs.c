@@ -118,8 +118,8 @@ static int binderfs_binder_device_create(struct inode *ref_inode,
 	mutex_lock(&binderfs_minors_mutex);
 	if (++info->device_count <= info->mount_opts.max)
 		minor = ida_alloc_max(&binderfs_minors,
-				      use_reserve ? BINDERFS_MAX_MINOR :
-						    BINDERFS_MAX_MINOR_CAPPED,
+				      use_reserve ? BINDERFS_MAX_MINOR - 1 :
+						    BINDERFS_MAX_MINOR_CAPPED - 1,
 				      GFP_KERNEL);
 	else
 		minor = -ENOSPC;
@@ -402,7 +402,7 @@ static const struct file_operations binder_ctl_fops = {
  */
 static int binderfs_binder_ctl_create(struct super_block *sb)
 {
-	int minor, ret;
+	int minor = -1, ret;
 	struct dentry *dentry;
 	struct binder_device *device;
 	struct inode *inode = NULL;
@@ -432,8 +432,8 @@ static int binderfs_binder_ctl_create(struct super_block *sb)
 	/* Reserve a new minor number for the new device. */
 	mutex_lock(&binderfs_minors_mutex);
 	minor = ida_alloc_max(&binderfs_minors,
-			      use_reserve ? BINDERFS_MAX_MINOR :
-					    BINDERFS_MAX_MINOR_CAPPED,
+			      use_reserve ? BINDERFS_MAX_MINOR - 1 :
+					    BINDERFS_MAX_MINOR_CAPPED - 1,
 			      GFP_KERNEL);
 	mutex_unlock(&binderfs_minors_mutex);
 	if (minor < 0) {
@@ -464,6 +464,11 @@ static int binderfs_binder_ctl_create(struct super_block *sb)
 	return 0;
 
 out:
+	if (minor >= 0) {
+		mutex_lock(&binderfs_minors_mutex);
+		ida_free(&binderfs_minors, minor);
+		mutex_unlock(&binderfs_minors_mutex);
+	}
 	kfree(device);
 	iput(inode);
 
@@ -555,7 +560,6 @@ out:
 	return dentry;
 }
 
-#ifdef CONFIG_ANDROID_BINDER_LOGS
 static struct dentry *binderfs_create_dir(struct dentry *parent,
 					  const char *name)
 {
@@ -591,6 +595,37 @@ out:
 	return dentry;
 }
 
+static struct binder_features {
+	bool oneway_spam_detection;
+} binder_features = {
+	.oneway_spam_detection = true,
+};
+
+static int binder_features_show(struct seq_file *m, void *unused)
+{
+	seq_printf(m, "%d\n", *(bool *)m->private);
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(binder_features);
+
+static int init_binder_features(struct super_block *sb)
+{
+	struct dentry *dentry, *dir;
+
+	dir = binderfs_create_dir(sb->s_root, "features");
+	if (IS_ERR(dir))
+		return PTR_ERR(dir);
+
+	dentry = binderfs_create_file(dir, "oneway_spam_detection",
+				      &binder_features_fops,
+				      &binder_features.oneway_spam_detection);
+	if (IS_ERR(dentry))
+		return PTR_ERR(dentry);
+
+	return 0;
+}
+
+#ifdef CONFIG_ANDROID_BINDER_LOGS
 static int init_binder_logs(struct super_block *sb)
 {
 	struct dentry *binder_logs_root_dir, *dentry, *proc_log_dir;
@@ -737,6 +772,10 @@ static int binderfs_fill_super(struct super_block *sb, void *data, int silent)
 		if (*name == ',')
 			name++;
 	}
+
+	ret = init_binder_features(sb);
+	if (ret)
+		return ret;
 
 	if (info->mount_opts.stats_mode == STATS_GLOBAL)
 		return init_binder_logs(sb);

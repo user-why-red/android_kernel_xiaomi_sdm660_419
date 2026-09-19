@@ -34,7 +34,8 @@ static int devfreq_vbif_get_freq(struct devfreq *df,
 
 	extern_get_bw(&ib, &ab, extern_get_bw_data);
 	dev_ib = ib;
-	*dev_ab = ab;
+	if (dev_ab)
+		*dev_ab = ab;
 
 	*freq = dev_ib;
 	return 0;
@@ -82,10 +83,11 @@ static int devfreq_vbif_ev_handler(struct devfreq *devfreq,
 		else
 			pr_warn("Device doesn't take AB votes!\n");
 
-		mutex_unlock(&df_lock);
-
 		dev_ib = 0;
-		*dev_ab = 0;
+		if (dev_ab)
+			*dev_ab = 0;
+
+		mutex_unlock(&df_lock);
 
 		ret = devfreq_vbif_update_bw();
 		if (ret) {

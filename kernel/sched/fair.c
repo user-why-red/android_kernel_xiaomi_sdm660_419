@@ -183,6 +183,32 @@ static inline bool cass_fits_cap(unsigned long util, unsigned long cap)
 {
 	return fits_capacity(util, cap, CASS_FIT_MARGIN);
 }
+
+/* Thermal-clipped orig capacity. Wakeup, misfit, and migrate
+ * must use this; capacity_orig_of() is the uncapped value.
+ */
+static inline unsigned long cass_cpu_fit_cap(int cpu)
+{
+	unsigned long orig = arch_scale_cpu_capacity(NULL, cpu);
+	unsigned long scale = arch_scale_max_freq_capacity(NULL, cpu);
+	unsigned long capped = orig * scale / SCHED_CAPACITY_SCALE;
+	unsigned long rq_cap = capacity_orig_of(cpu);
+
+	if (rq_cap && rq_cap < capped)
+		capped = rq_cap;
+	if (!capped)
+		capped = 1;
+	if (capped > orig)
+		return orig;
+	return capped;
+}
+
+static atomic_t cass_boost_count = ATOMIC_INIT(0);
+
+static inline bool cass_boosted(void)
+{
+	return atomic_read(&cass_boost_count) > 0;
+}
 #endif
 
 unsigned int sched_capacity_margin_up[CPU_NR] = {
@@ -3985,11 +4011,12 @@ static inline unsigned long cass_task_util(struct task_struct *p)
 static inline bool cass_task_fits_cpu(struct task_struct *p, int cpu)
 {
 	if (is_min_capacity_cpu(cpu) &&
-	    (schedtune_prefer_high_cap(p) ||
+	    (cass_boosted() ||
+	     schedtune_prefer_high_cap(p) ||
 	     per_task_boost(p) > TASK_BOOST_NONE))
 		return false;
 
-	return cass_fits_cap(cass_task_util(p), capacity_orig_of(cpu));
+	return cass_fits_cap(cass_task_util(p), cass_cpu_fit_cap(cpu));
 }
 #endif
 
@@ -5733,8 +5760,13 @@ static unsigned long capacity_of(int cpu);
 
 bool __cpu_overutilized(int cpu, int delta)
 {
+#ifdef CONFIG_SCHED_CASS
+	return !fits_capacity((cpu_util(cpu) + delta), cass_cpu_fit_cap(cpu),
+			      sched_capacity_margin_up[cpu]);
+#else
 	return !fits_capacity((cpu_util(cpu) + delta), capacity_orig_of(cpu),
 			      sched_capacity_margin_up[cpu]);
+#endif
 }
 
 bool cpu_overutilized(int cpu)
@@ -9307,8 +9339,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 #ifdef CONFIG_SCHED_CASS
 	if (!cass_can_migrate_task(p, env->src_cpu, env->dst_cpu))
 		return 0;
-#endif
-
+#else
 	if (static_branch_unlikely(&sched_energy_present)) {
 		struct root_domain *rd = env->dst_rq->rd;
 
@@ -9326,6 +9357,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 				return 0;
 		}
 	}
+#endif
 
 #ifdef CONFIG_SCHED_WALT
 	if (env->flags & LBF_IGNORE_PREFERRED_CLUSTER_TASKS &&
@@ -10822,7 +10854,12 @@ static struct sched_group *find_busiest_group(struct lb_env *env)
 	if (static_branch_unlikely(&sched_energy_present)) {
 		struct root_domain *rd = env->dst_rq->rd;
 
-		if (rcu_dereference(rd->pd) && !sd_overutilized(env->sd)) {
+		if (rcu_dereference(rd->pd) && !sd_overutilized(env->sd)
+#ifdef CONFIG_SCHED_CASS
+		    && !(sds.busiest &&
+			 sds.busiest_stat.group_type == group_misfit_task)
+#endif
+							) {
 			int cpu_local, cpu_busiest;
 			unsigned long capacity_local, capacity_busiest;
 

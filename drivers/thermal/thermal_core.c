@@ -724,27 +724,36 @@ int thermal_zone_bind_cooling_device(struct thermal_zone_device *tz,
 		return ret;
 
 	/*
-	 * If upper or lower has a MACRO to define the mitigation state,
-	 * based on the MACRO determine the default state to use or the
-	 * offset from the max_state.
+	 * THERMAL_NO_LIMIT => max/0. THERMAL_MAX_LIMIT-N => max_state-N.
+	 * The old 'upper >= MAX_LIMIT - max_state' test skipped that
+	 * when N > max_state (short GPU tables) and also rejected a
+	 * plain state past the OPP count (Gold skin map).
 	 */
-	if (upper >= (THERMAL_MAX_LIMIT - max_state)) {
-		/* upper default max_state */
-		if (upper == THERMAL_NO_LIMIT)
+	if (upper == THERMAL_NO_LIMIT)
+		upper = max_state;
+	else if (upper > max_state) {
+		unsigned long off = (unsigned long)THERMAL_MAX_LIMIT -
+				    (u32)upper;
+
+		if (off <= 32)
+			upper = (off <= max_state) ? max_state - off : 0;
+		else
 			upper = max_state;
-		else
-			upper = max_state - (THERMAL_MAX_LIMIT - upper);
 	}
 
-	if (lower >= (THERMAL_MAX_LIMIT - max_state)) {
-		/* lower default 0 */
-		if (lower == THERMAL_NO_LIMIT)
-			lower = 0;
+	if (lower == THERMAL_NO_LIMIT)
+		lower = 0;
+	else if (lower > max_state) {
+		unsigned long off = (unsigned long)THERMAL_MAX_LIMIT -
+				    (u32)lower;
+
+		if (off <= 32)
+			lower = (off <= max_state) ? max_state - off : 0;
 		else
-			lower =  max_state - (THERMAL_MAX_LIMIT - lower);
+			lower = max_state;
 	}
 
-	if (lower > upper || upper > max_state)
+	if (lower > upper)
 		return -EINVAL;
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);

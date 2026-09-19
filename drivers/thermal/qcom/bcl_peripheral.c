@@ -629,8 +629,10 @@ static void bcl_probe_soc(struct platform_device *pdev)
 	soc_data->tz_dev = thermal_zone_of_sensor_register(&pdev->dev,
 				BCL_SOC_MONITOR, soc_data, &soc_data->ops);
 	if (IS_ERR(soc_data->tz_dev)) {
-		pr_err("vbat register failed. err:%ld\n",
-				PTR_ERR(soc_data->tz_dev));
+		long err = PTR_ERR(soc_data->tz_dev);
+
+		if (err != -ENODEV)
+			pr_err("soc register failed. err:%ld\n", err);
 		return;
 	}
 	thermal_zone_device_update(soc_data->tz_dev, THERMAL_DEVICE_UP);
@@ -659,8 +661,10 @@ static void bcl_vbat_init(struct platform_device *pdev,
 	vbat->tz_dev = thermal_zone_of_sensor_register(&pdev->dev,
 				type, vbat, &vbat->ops);
 	if (IS_ERR(vbat->tz_dev)) {
-		pr_err("vbat register failed. err:%ld\n",
-				PTR_ERR(vbat->tz_dev));
+		long err = PTR_ERR(vbat->tz_dev);
+
+		if (err != -ENODEV)
+			pr_err("vbat register failed. err:%ld\n", err);
 		return;
 	}
 	thermal_zone_device_update(vbat->tz_dev, THERMAL_DEVICE_UP);
@@ -686,8 +690,10 @@ static void bcl_ibat_init(struct platform_device *pdev,
 	ibat->tz_dev = thermal_zone_of_sensor_register(&pdev->dev,
 				type, ibat, &ibat->ops);
 	if (IS_ERR(ibat->tz_dev)) {
-		pr_err("ibat register failed. err:%ld\n",
-				PTR_ERR(ibat->tz_dev));
+		long err = PTR_ERR(ibat->tz_dev);
+
+		if (err != -ENODEV)
+			pr_err("ibat register failed. err:%ld\n", err);
 		return;
 	}
 	thermal_zone_device_update(ibat->tz_dev, THERMAL_DEVICE_UP);

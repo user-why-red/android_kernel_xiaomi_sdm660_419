@@ -7236,7 +7236,7 @@ static int __init arm_smmu_driver_init(void)
 {
 	int ret;
 
-	ret = platform_driver_register(&arm_smmu_driver);
+	ret = arm_smmu_init();
 #ifdef MODULE
 	if (!ret)
 		arm_smmu_legacy_bus_init();

@@ -743,19 +743,41 @@ boost_write(struct cgroup_subsys_state *css, struct cftype *cft,
 	return 0;
 }
 
+#ifndef CONFIG_SCHED_WALT
+static u64 schedtune_nop_read(struct cgroup_subsys_state *css,
+			      struct cftype *cft)
+{
+	return 0;
+}
+
+static int schedtune_nop_write(struct cgroup_subsys_state *css,
+			       struct cftype *cft, u64 val)
+{
+	return 0;
+}
+#endif
+
 static struct cftype files[] = {
-#ifdef CONFIG_SCHED_WALT
 	{
 		.name = "sched_boost_no_override",
+#ifdef CONFIG_SCHED_WALT
 		.read_u64 = sched_boost_override_read,
 		.write_u64 = sched_boost_override_write,
+#else
+		.read_u64 = schedtune_nop_read,
+		.write_u64 = schedtune_nop_write,
+#endif
 	},
 	{
 		.name = "colocate",
+#ifdef CONFIG_SCHED_WALT
 		.read_u64 = sched_colocate_read,
 		.write_u64 = sched_colocate_write,
-	},
+#else
+		.read_u64 = schedtune_nop_read,
+		.write_u64 = schedtune_nop_write,
 #endif
+	},
 	{
 		.name = "boost",
 		.read_s64 = boost_read,
