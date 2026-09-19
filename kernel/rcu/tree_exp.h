@@ -340,6 +340,7 @@ static void __sync_rcu_exp_select_node_cpus(struct rcu_exp_work *rewp)
 	unsigned long flags;
 	unsigned long mask_ofl_test;
 	unsigned long mask_ofl_ipi;
+	unsigned long retry_limit;
 	int ret;
 	struct rcu_node *rnp = container_of(rewp, struct rcu_node, rew);
 
@@ -375,6 +376,7 @@ static void __sync_rcu_exp_select_node_cpus(struct rcu_exp_work *rewp)
 	raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
 
 	/* IPI the remaining CPUs for expedited quiescent state. */
+	retry_limit = jiffies + HZ;
 	for_each_leaf_node_cpu_mask(rnp, cpu, mask_ofl_ipi) {
 		struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
 		unsigned long mask = rdp->grpmask;
@@ -401,6 +403,8 @@ retry_ipi:
 		    (rnp->expmask & mask)) {
 			/* Online, so delay for a bit and try again. */
 			raw_spin_unlock_irqrestore_rcu_node(rnp, flags);
+			if (time_after(jiffies, retry_limit))
+				continue;
 			trace_rcu_exp_grace_period(rcu_state.name, rcu_exp_gp_seq_endval(), TPS("selectofl"));
 			schedule_timeout_idle(1);
 			goto retry_ipi;
