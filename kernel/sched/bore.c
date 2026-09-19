@@ -96,6 +96,133 @@ void restart_burst_bore(struct task_struct *p)
 	bore_set_penalty(p);
 }
 
+#define BORE_CACHE_SAMPLE 63
+#define BORE_CACHE_SCAN (BORE_CACHE_SAMPLE * 2)
+
+u8 bore_apply_score(struct task_struct *p)
+{
+	if (!sched_bore)
+		return 0;
+	if (p->flags & PF_KTHREAD)
+		return 0;
+	if (p->policy == SCHED_BATCH || p->policy == SCHED_IDLE)
+		return 0;
+#ifdef CONFIG_UCLAMP_TASK
+	if (uclamp_is_used() &&
+	    uclamp_eff_value(p, UCLAMP_MAX) < SCHED_CAPACITY_SCALE / 5)
+		return 0;
+#endif
+	return bore_score(p);
+}
+
+static bool bore_inheritable(struct task_struct *p)
+{
+	return p->sched_class == &fair_sched_class &&
+	       !p->exit_state && !(p->flags & PF_KTHREAD);
+}
+
+static u32 count_children_upto2(struct task_struct *p)
+{
+	struct list_head *h = &p->children;
+
+	if (h->next == h)
+		return 0;
+	if (h->next->next == h)
+		return 1;
+	return 2;
+}
+
+static void update_child_burst_cache(struct task_struct *p, u64 now)
+{
+	struct task_struct *child;
+	u32 cnt = 0, sum = 0, scan = 0, avg;
+
+	list_for_each_entry(child, &p->children, sibling) {
+		if (scan++ >= BORE_CACHE_SCAN)
+			break;
+		if (!bore_inheritable(child))
+			continue;
+		cnt++;
+		sum += child->bore.penalty;
+		if (cnt >= BORE_CACHE_SAMPLE)
+			break;
+	}
+	avg = cnt ? sum / cnt : 0;
+	if (avg < p->bore.penalty)
+		avg = p->bore.penalty;
+	p->bore.child_burst = avg;
+	p->bore.child_burst_cnt = cnt;
+	p->bore.child_burst_cached = now;
+}
+
+static u32 inherit_from_parent(struct task_struct *parent, u64 now)
+{
+	if (now - parent->bore.child_burst_cached > sched_burst_cache_lifetime)
+		update_child_burst_cache(parent, now);
+	return parent->bore.child_burst;
+}
+
+static u32 inherit_from_ancestor(struct task_struct *parent, u64 now)
+{
+	struct task_struct *anc = parent;
+
+	while (anc->real_parent != anc && count_children_upto2(anc) == 1)
+		anc = anc->real_parent;
+	return inherit_from_parent(anc, now);
+}
+
+static u32 inherit_from_thread_group(struct task_struct *p, u64 now)
+{
+	struct task_struct *leader = p->group_leader;
+	struct task_struct *t;
+	u32 cnt = 0, sum = 0, scan = 0, avg;
+
+	if (now - leader->bore.group_burst_cached <= sched_burst_cache_lifetime)
+		return leader->bore.group_burst;
+
+	for_each_thread(leader, t) {
+		if (scan++ >= BORE_CACHE_SCAN)
+			break;
+		if (!bore_inheritable(t))
+			continue;
+		cnt++;
+		sum += t->bore.penalty;
+		if (cnt >= BORE_CACHE_SAMPLE)
+			break;
+	}
+	avg = cnt ? sum / cnt : 0;
+	if (avg < leader->bore.penalty)
+		avg = leader->bore.penalty;
+	leader->bore.group_burst = avg;
+	leader->bore.group_burst_cached = now;
+	return avg;
+}
+
+void task_fork_bore(struct task_struct *p)
+{
+	u64 now;
+	u32 inherited = 0;
+
+	if (!sched_bore || !bore_inheritable(p))
+		return;
+
+	now = ktime_get_ns();
+	read_lock(&tasklist_lock);
+	if (!thread_group_leader(p))
+		inherited = inherit_from_thread_group(p, now);
+	else if (sched_burst_inherit_type == 2)
+		inherited = inherit_from_ancestor(p->real_parent, now);
+	else if (sched_burst_inherit_type == 1)
+		inherited = inherit_from_parent(p->real_parent, now);
+	read_unlock(&tasklist_lock);
+
+	if (p->bore.prev_penalty < inherited)
+		p->bore.prev_penalty = inherited;
+	p->bore.curr_penalty = 0;
+	p->bore.burst_time = 0;
+	bore_set_penalty(p);
+}
+
 void reset_task_bore(struct task_struct *p)
 {
 	memset(&p->bore, 0, sizeof(p->bore));

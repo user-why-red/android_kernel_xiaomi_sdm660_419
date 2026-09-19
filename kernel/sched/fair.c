@@ -762,12 +762,10 @@ static inline u64 calc_delta_fair(u64 delta, struct sched_entity *se)
 	if (unlikely(se->load.weight != NICE_0_LOAD))
 		delta = __calc_delta(delta, NICE_0_LOAD, &se->load);
 
-	if (sched_bore && entity_is_task(se)) {
-		struct task_struct *p = task_of(se);
-		u8 score = bore_score(p);
+	if (entity_is_task(se)) {
+		u8 score = bore_apply_score(task_of(se));
 
-		if (score && !(p->flags & PF_KTHREAD) &&
-		    p->policy != SCHED_BATCH && p->policy != SCHED_IDLE)
+		if (score)
 			delta = mul_u64_u32_shr(delta,
 					sched_prio_to_wmult[score], 22);
 	}
@@ -8672,9 +8670,8 @@ static void bore_wakeup_backstep(s64 *vdiff, struct sched_entity *se)
 	if (!sched_bore || !entity_is_task(se))
 		return;
 	p = task_of(se);
-	score = bore_score(p);
-	if (!score || (p->flags & PF_KTHREAD) ||
-	    p->policy == SCHED_BATCH || p->policy == SCHED_IDLE)
+	score = bore_apply_score(p);
+	if (!score)
 		return;
 
 	delta_exec = se->sum_exec_runtime - se->prev_sum_exec_runtime;
