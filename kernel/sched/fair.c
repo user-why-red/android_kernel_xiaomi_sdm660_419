@@ -762,6 +762,15 @@ static inline u64 calc_delta_fair(u64 delta, struct sched_entity *se)
 	if (unlikely(se->load.weight != NICE_0_LOAD))
 		delta = __calc_delta(delta, NICE_0_LOAD, &se->load);
 
+	if (sched_bore && entity_is_task(se)) {
+		struct task_struct *p = task_of(se);
+		u8 score = bore_score(p);
+
+		if (score && !(p->flags & PF_KTHREAD) &&
+		    p->policy != SCHED_BATCH && p->policy != SCHED_IDLE)
+			delta = mul_u64_u32_shr(delta,
+					sched_prio_to_wmult[score], 22);
+	}
 	return delta;
 }
 
