@@ -2393,6 +2393,8 @@ static void rcu_cleanup_dead_rnp(struct rcu_node *rnp_leaf)
  * There can only be one CPU hotplug operation at a time, so no need for
  * explicit locking.
  */
+static void kfree_rcu_cpu_dead(unsigned int cpu);
+
 int rcutree_dead_cpu(unsigned int cpu)
 {
 	struct rcu_data *rdp = per_cpu_ptr(&rcu_data, cpu);
@@ -2405,6 +2407,7 @@ int rcutree_dead_cpu(unsigned int cpu)
 	rcu_boost_kthread_setaffinity(rnp, -1);
 	/* Do any needed no-CB deferred wakeups from this CPU. */
 	do_nocb_deferred_wakeup(per_cpu_ptr(&rcu_data, cpu));
+	kfree_rcu_cpu_dead(cpu);
 
 	// Stop-machine done, so allow nohz_full to disable tick.
 	tick_dep_clear(TICK_DEP_BIT_RCU);
@@ -3338,6 +3341,18 @@ static inline void kfree_rcu_drain_unlock(struct kfree_rcu_cpu *krcp,
 	krcp->monitor_todo = true;
 	schedule_delayed_work(&krcp->monitor_work, KFREE_DRAIN_JIFFIES);
 	raw_spin_unlock_irqrestore(&krcp->lock, flags);
+}
+
+static void kfree_rcu_cpu_dead(unsigned int cpu)
+{
+	struct kfree_rcu_cpu *krcp = per_cpu_ptr(&krc, cpu);
+	unsigned long flags;
+
+	hrtimer_cancel(&krcp->hrtimer);
+	atomic_set(&krcp->work_in_progress, 0);
+	raw_spin_lock_irqsave(&krcp->lock, flags);
+	krcp->monitor_todo = true;
+	kfree_rcu_drain_unlock(krcp, flags);
 }
 
 /*
