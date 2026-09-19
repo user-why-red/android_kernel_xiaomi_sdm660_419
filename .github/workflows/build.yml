@@ -19,7 +19,8 @@ jobs:
     - name: Clone Toolchain (Proton Clang)
       run: |
         git clone --depth=1 https://gitlab.com/kdrag0n/proton-clang.git $GITHUB_WORKSPACE/clang
-        - name: set up xxksu
+        
+    - name: set up xxksu
       run: |
         curl -LSs "https://raw.githubusercontent.com/backslashxx/KernelSU/master/kernel/setup.sh" | bash -s master
         
