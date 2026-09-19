@@ -1299,13 +1299,34 @@ setup_irq_thread(struct irqaction *new, unsigned int irq, bool secondary)
 
 static void add_desc_to_perf_list(struct irq_desc *desc, unsigned int perf_flag)
 {
-	struct irq_desc_list *item;
+	struct irq_desc_list *item, *pos;
 
-	item = kmalloc(sizeof(*item), GFP_ATOMIC | __GFP_NOFAIL);
+	raw_spin_lock(&perf_irqs_lock);
+	list_for_each_entry(pos, &perf_crit_irqs, list) {
+		if (pos->desc == desc) {
+			pos->perf_flag = perf_flag;
+			raw_spin_unlock(&perf_irqs_lock);
+			return;
+		}
+	}
+	raw_spin_unlock(&perf_irqs_lock);
+
+	item = kmalloc(sizeof(*item), GFP_ATOMIC);
+	if (!item)
+		return;
+
 	item->desc = desc;
 	item->perf_flag = perf_flag;
 
 	raw_spin_lock(&perf_irqs_lock);
+	list_for_each_entry(pos, &perf_crit_irqs, list) {
+		if (pos->desc == desc) {
+			pos->perf_flag = perf_flag;
+			raw_spin_unlock(&perf_irqs_lock);
+			kfree(item);
+			return;
+		}
+	}
 	list_add(&item->list, &perf_crit_irqs);
 	raw_spin_unlock(&perf_irqs_lock);
 }
