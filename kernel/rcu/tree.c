@@ -3401,12 +3401,8 @@ static void
 run_page_cache_worker(struct kfree_rcu_cpu *krcp)
 {
 	if (rcu_scheduler_active == RCU_SCHEDULER_RUNNING &&
-			!atomic_xchg(&krcp->work_in_progress, 1)) {
-		hrtimer_init(&krcp->hrtimer, CLOCK_MONOTONIC,
-			HRTIMER_MODE_REL);
-		krcp->hrtimer.function = schedule_page_work_fn;
+			!atomic_xchg(&krcp->work_in_progress, 1))
 		hrtimer_start(&krcp->hrtimer, 0, HRTIMER_MODE_REL);
-	}
 }
 
 static inline bool
@@ -3588,13 +3584,14 @@ void __init kfree_rcu_scheduler_running(void)
 		struct kfree_rcu_cpu *krcp = per_cpu_ptr(&krc, cpu);
 
 		raw_spin_lock_irqsave(&krcp->lock, flags);
-		if (!krcp->head || krcp->monitor_todo) {
+		if (krcp->monitor_todo ||
+		    (!krcp->head && !krcp->bkvhead[0] && !krcp->bkvhead[1])) {
 			raw_spin_unlock_irqrestore(&krcp->lock, flags);
 			continue;
 		}
 		krcp->monitor_todo = true;
-		schedule_delayed_work_on(cpu, &krcp->monitor_work,
-					 KFREE_DRAIN_JIFFIES);
+		schedule_delayed_work(&krcp->monitor_work,
+				      KFREE_DRAIN_JIFFIES);
 		raw_spin_unlock_irqrestore(&krcp->lock, flags);
 	}
 }
@@ -4568,6 +4565,8 @@ static void __init kfree_rcu_batch_init(void)
 
 		INIT_DELAYED_WORK(&krcp->monitor_work, kfree_rcu_monitor);
 		INIT_WORK(&krcp->page_cache_work, fill_page_cache_func);
+		hrtimer_init(&krcp->hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+		krcp->hrtimer.function = schedule_page_work_fn;
 		krcp->initialized = true;
 	}
 	if (register_shrinker(&kfree_rcu_shrinker))
