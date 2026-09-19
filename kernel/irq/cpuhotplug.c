@@ -220,6 +220,9 @@ static void irq_restore_affinity_of_irq(struct irq_desc *desc, unsigned int cpu)
 	if (irqd_has_set(data, IRQD_PERF_CRITICAL))
 		return;
 
+	if (desc->istate & IRQS_SUSPENDED)
+		return;
+
 	if (!irqd_affinity_is_managed(data) || !desc->action ||
 	    !irq_data_get_irq_chip(data) || !cpumask_test_cpu(cpu, affinity))
 		return;
