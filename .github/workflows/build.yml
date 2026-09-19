@@ -1,0 +1,43 @@
+name: Build Kernel SDM660 (4.19)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Install Build Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential bc bison flex libssl-dev libncurses5-dev libelf-dev clang lld llvm libssl-dev zip
+
+    - name: Clone Toolchain (Proton Clang)
+      run: |
+        git clone --depth=1 https://gitlab.com/kdrag0n/proton-clang.git $GITHUB_WORKSPACE/clang
+
+    - name: Build Kernel
+      run: |
+        export PATH="$GITHUB_WORKSPACE/clang/bin:$PATH"
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export CC=clang
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+
+        # Gunakan gki_defconfig atau defconfig bawaan repo kamu
+        make O=out gki_defconfig
+
+        # Proses compile kernel
+        make -j$(nproc) O=out
+
+    - name: Upload Kernel Image
+      uses: actions/upload-artifact@v4
+      with:
+        name: Kernel-Image-SDM660
+        path: out/arch/arm64/boot/Image.gz-dtb
+        
