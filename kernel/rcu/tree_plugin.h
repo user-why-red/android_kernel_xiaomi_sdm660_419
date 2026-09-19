@@ -581,7 +581,7 @@ static void rcu_preempt_deferred_qs(struct task_struct *t)
 }
 
 /*
- * Minimal handler to give the scheduler a chance to re-evaluate.
+ * irq_work: IRQs are on again, so the deferred QS can be reported.
  */
 static void rcu_preempt_deferred_qs_handler(struct irq_work *iwp)
 {
@@ -589,6 +589,7 @@ static void rcu_preempt_deferred_qs_handler(struct irq_work *iwp)
 
 	rdp = container_of(iwp, struct rcu_data, defer_qs_iw);
 	rdp->defer_qs_iw_pending = false;
+	rcu_preempt_deferred_qs(current);
 }
 
 /*
