@@ -85,6 +85,7 @@
 #endif
 
 #include "tune.h"
+#include "bore.h"
 
 struct rq;
 struct cpuidle_state;

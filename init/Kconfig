@@ -1271,6 +1271,17 @@ config SCHED_CASS
 	  their lowest P-state necessary to satisfy the overall load at any
 	  given moment.
 
+config SCHED_BORE
+	bool "Burst-Oriented Response Enhancer"
+	default y
+	help
+	  Score CFS tasks by burst time (runtime since last sleep
+	  or yield) and stretch vruntime for greedy tasks so short
+	  interactive bursts win pick_next. Placement is unchanged.
+	  Toggle at runtime with kernel.sched_bore.
+
+	  If unsure, say Y.
+
 config SCHED_AUTOGROUP
 	bool "Automatic process group scheduling"
 	select CGROUPS
