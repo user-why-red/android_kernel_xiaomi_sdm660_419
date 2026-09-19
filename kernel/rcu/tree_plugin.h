@@ -1364,7 +1364,6 @@ int rcu_needs_cpu(u64 basemono, u64 *nextevt)
 		invoke_rcu_core();
 		return 1;
 	}
-	rdp->last_accelerate = jiffies;
 
 	/* Request timer and round. */
 	dj = round_up(rcu_idle_gp_delay + jiffies, rcu_idle_gp_delay) - jiffies;
