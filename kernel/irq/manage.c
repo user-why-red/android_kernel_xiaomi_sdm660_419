@@ -1813,6 +1813,7 @@ static struct irqaction *__free_irq(struct irq_desc *desc, void *dev_id)
 	unsigned irq = desc->irq_data.irq;
 	struct irqaction *action, **action_ptr;
 	unsigned long flags;
+	bool perf_crit;
 
 	WARN(in_interrupt(), "Trying to free IRQ %d from IRQ context!\n", irq);
 
@@ -1841,19 +1842,7 @@ static struct irqaction *__free_irq(struct irq_desc *desc, void *dev_id)
 		action_ptr = &action->next;
 	}
 
-	if (irqd_has_set(&desc->irq_data, IRQD_PERF_CRITICAL)) {
-		struct irq_desc_list *data;
-
-		raw_spin_lock(&perf_irqs_lock);
-		list_for_each_entry(data, &perf_crit_irqs, list) {
-			if (data->desc == desc) {
-				list_del(&data->list);
-				kfree(data);
-				break;
-			}
-		}
-		raw_spin_unlock(&perf_irqs_lock);
-	}
+	perf_crit = irqd_has_set(&desc->irq_data, IRQD_PERF_CRITICAL);
 
 	/* Found it - now remove it from the list of entries: */
 	*action_ptr = action->next;
@@ -1874,6 +1863,21 @@ static struct irqaction *__free_irq(struct irq_desc *desc, void *dev_id)
 #endif
 
 	raw_spin_unlock_irqrestore(&desc->lock, flags);
+
+	if (perf_crit) {
+		struct irq_desc_list *data, *n = NULL;
+
+		raw_spin_lock(&perf_irqs_lock);
+		list_for_each_entry(data, &perf_crit_irqs, list) {
+			if (data->desc == desc) {
+				list_del(&data->list);
+				n = data;
+				break;
+			}
+		}
+		raw_spin_unlock(&perf_irqs_lock);
+		kfree(n);
+	}
 	/*
 	 * Drop bus_lock here so the changes which were done in the chip
 	 * callbacks above are synced out to the irq chips which hang
