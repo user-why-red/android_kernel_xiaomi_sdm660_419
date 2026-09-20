@@ -158,8 +158,8 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 		bool pack = true;
 
 		if (sync &&
-		    ((a->cpu == this_cpu && a->cap_max >= b->cap_max) ||
-		     (b->cpu == this_cpu && b->cap_max >= a->cap_max)))
+		    ((a->cpu == this_cpu && a->cap_orig >= b->cap_orig) ||
+		     (b->cpu == this_cpu && b->cap_orig >= a->cap_orig)))
 			pack = false;
 
 		if (pack) {
@@ -168,7 +168,7 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 			bool b_fits = cass_fits_cap(p_util, b->cap_max) &&
 				      b->eff_util <= b->cap_max;
 
-			if (a_fits && b_fits && cass_cmp(b->cap_max, a->cap_max))
+			if (a_fits && b_fits && cass_cmp(b->cap_orig, a->cap_orig))
 				goto done;
 			if (a_fits != b_fits && cass_cmp(a_fits, b_fits))
 				goto done;
