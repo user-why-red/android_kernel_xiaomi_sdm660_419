@@ -157,6 +157,15 @@ static void update_deadline(struct cfs_rq *cfs_rq, struct sched_entity *se)
 
 #define __node_2_se(node) rb_entry((node), struct sched_entity, run_node)
 
+static struct sched_entity *__pick_root_entity(struct cfs_rq *cfs_rq)
+{
+	struct rb_node *root = cfs_rq->tasks_timeline.rb_root.rb_node;
+
+	if (!root)
+		return NULL;
+	return __node_2_se(root);
+}
+
 static inline u64 compute_min_vruntime(struct sched_entity *se)
 {
 	struct rb_node *node = &se->run_node;
