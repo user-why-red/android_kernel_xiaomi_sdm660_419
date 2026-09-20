@@ -1366,9 +1366,10 @@ static enum compact_result __compact_finished(struct zone *zone,
 			return COMPACT_SUCCESS;
 
 #ifdef CONFIG_CMA
-		/* MIGRATE_MOVABLE can fallback on MIGRATE_CMA */
+		/* Only an ALLOC_CMA caller can take a CMA page. */
 		if (migratetype == MIGRATE_MOVABLE &&
-			!list_empty(&area->free_list[MIGRATE_CMA]))
+		    (cc->alloc_flags & ALLOC_CMA) &&
+		    !list_empty(&area->free_list[MIGRATE_CMA]))
 			return COMPACT_SUCCESS;
 #endif
 		/*
@@ -1461,7 +1462,7 @@ static enum compact_result __compaction_suitable(struct zone *zone, int order,
 				low_wmark_pages(zone) : min_wmark_pages(zone);
 	watermark += compact_gap(order);
 	if (!__zone_watermark_ok(zone, 0, watermark, classzone_idx,
-						ALLOC_CMA, wmark_target))
+			alloc_flags & ALLOC_CMA, wmark_target))
 		return COMPACT_SKIPPED;
 
 	return COMPACT_CONTINUE;
