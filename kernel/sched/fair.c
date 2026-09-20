@@ -627,6 +627,7 @@ static inline int entity_before(struct sched_entity *a,
 }
 
 #ifdef CONFIG_SCHED_EEVDF
+static inline u64 calc_delta_fair(u64 delta, struct sched_entity *se);
 #include "fair_eevdf.c"
 #endif
 
@@ -677,8 +678,7 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 #ifdef CONFIG_SCHED_EEVDF
 	eevdf_enqueue_entity(cfs_rq, se);
-	return;
-#endif
+#else
 	struct rb_node **link = &cfs_rq->tasks_timeline.rb_root.rb_node;
 	struct rb_node *parent = NULL;
 	struct sched_entity *entry;
@@ -705,6 +705,7 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	rb_link_node(&se->run_node, parent, link);
 	rb_insert_color_cached(&se->run_node,
 			       &cfs_rq->tasks_timeline, leftmost);
+#endif
 }
 
 static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
@@ -726,6 +727,7 @@ struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq)
 	return rb_entry(left, struct sched_entity, run_node);
 }
 
+#ifndef CONFIG_SCHED_EEVDF
 static struct sched_entity *__pick_next_entity(struct sched_entity *se)
 {
 	struct rb_node *next = rb_next(&se->run_node);
@@ -735,6 +737,7 @@ static struct sched_entity *__pick_next_entity(struct sched_entity *se)
 
 	return rb_entry(next, struct sched_entity, run_node);
 }
+#endif
 
 #ifdef CONFIG_SCHED_DEBUG
 struct sched_entity *__pick_last_entity(struct cfs_rq *cfs_rq)
@@ -857,10 +860,12 @@ static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
  *
  * vs = s/w
  */
+#ifndef CONFIG_SCHED_EEVDF
 static u64 sched_vslice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	return calc_delta_fair(sched_slice(cfs_rq, se), se);
 }
+#endif
 
 #include "pelt.h"
 #ifdef CONFIG_SMP
@@ -4480,8 +4485,7 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 {
 #ifdef CONFIG_SCHED_EEVDF
 	eevdf_place_entity(cfs_rq, se, initial);
-	return;
-#endif
+#else
 	u64 vruntime = cfs_rq->min_vruntime;
 
 	/*
@@ -4543,6 +4547,7 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 		se->vruntime = vruntime;
 	else
 		se->vruntime = max_vruntime(se->vruntime, vruntime);
+#endif
 }
 
 static void check_enqueue_throttle(struct cfs_rq *cfs_rq);
@@ -4849,7 +4854,7 @@ pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 {
 #ifdef CONFIG_SCHED_EEVDF
 	return pick_eevdf(cfs_rq);
-#endif
+#else
 	struct sched_entity *left = __pick_first_entity(cfs_rq);
 	struct sched_entity *se;
 
@@ -4896,6 +4901,7 @@ pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	clear_buddies(cfs_rq, se);
 
 	return se;
+#endif
 }
 
 static bool check_cfs_rq_runtime(struct cfs_rq *cfs_rq);

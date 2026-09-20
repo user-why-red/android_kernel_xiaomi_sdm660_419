@@ -68,6 +68,10 @@ static void bore_set_penalty(struct task_struct *p)
 	p->bore.penalty = pen;
 }
 
+#ifdef CONFIG_SCHED_EEVDF
+static void bore_eevdf_commit(struct task_struct *p);
+#endif
+
 void update_curr_bore(struct task_struct *p, u64 delta_exec)
 {
 	u32 curr;
