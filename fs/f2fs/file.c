@@ -108,6 +108,23 @@ static vm_fault_t f2fs_vm_page_mkwrite(struct vm_fault *vmf)
 
 	file_update_time(vmf->vma->vm_file);
 	f2fs_down_read(&F2FS_I(inode)->i_mmap_sem);
+#ifdef CONFIG_F2FS_FS_COMPRESSION
+	if (!need_alloc) {
+		struct page *pagep;
+		void *fsdata = NULL;
+		int cret;
+
+		cret = f2fs_prepare_compress_overwrite(inode, &pagep,
+						page->index, &fsdata);
+		if (cret < 0) {
+			err = cret;
+			goto out_sem;
+		}
+		if (cret)
+			f2fs_compress_write_end(inode, fsdata,
+						page->index, 1);
+	}
+#endif
 	lock_page(page);
 	if (unlikely(page->mapping != inode->i_mapping ||
 			page_offset(page) > i_size_read(inode) ||
