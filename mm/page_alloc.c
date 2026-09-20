@@ -70,11 +70,15 @@
 #include <linux/nmi.h>
 #include <linux/khugepaged.h>
 #include <linux/psi.h>
+#include <linux/cma.h>
 
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
 #include "internal.h"
+#ifdef CONFIG_CMA
+#include "cma.h"
+#endif
 
 atomic_long_t kswapd_waiters = ATOMIC_LONG_INIT(0);
 atomic_long_t kshrinkd_waiters = ATOMIC_LONG_INIT(0);
@@ -7695,6 +7699,36 @@ static void setup_per_zone_lowmem_reserve(void)
 	calculate_totalreserve_pages();
 }
 
+#ifdef CONFIG_CMA
+static unsigned long zone_cma_pages(struct zone *zone)
+{
+	unsigned long n = 0;
+	unsigned int i;
+
+	for (i = 0; i < cma_area_count; i++) {
+		unsigned long pfn = cma_areas[i].base_pfn;
+
+		if (pfn >= zone->zone_start_pfn && pfn < zone_end_pfn(zone))
+			n += cma_areas[i].count;
+	}
+	return n;
+}
+#endif
+
+static unsigned long zone_wmark_pages(struct zone *zone)
+{
+	unsigned long managed = zone_managed_pages(zone);
+#ifdef CONFIG_CMA
+	unsigned long cma = zone_cma_pages(zone);
+
+	if (managed > cma)
+		managed -= cma;
+	else
+		managed = 1;
+#endif
+	return managed;
+}
+
 static void __setup_per_zone_wmarks(void)
 {
 	unsigned long pages_min = min_free_kbytes >> (PAGE_SHIFT - 10);
@@ -7706,16 +7740,19 @@ static void __setup_per_zone_wmarks(void)
 	/* Calculate total number of !ZONE_HIGHMEM pages */
 	for_each_zone(zone) {
 		if (!is_highmem(zone))
-			lowmem_pages += zone_managed_pages(zone);
+			lowmem_pages += zone_wmark_pages(zone);
 	}
+	if (!lowmem_pages)
+		lowmem_pages = 1;
 
 	for_each_zone(zone) {
 		u64 min, low;
+		unsigned long managed = zone_wmark_pages(zone);
 
 		spin_lock_irqsave(&zone->lock, flags);
-		min = (u64)pages_min * zone_managed_pages(zone);
+		min = (u64)pages_min * managed;
 		do_div(min, lowmem_pages);
-		low = (u64)pages_low * zone_managed_pages(zone);
+		low = (u64)pages_low * managed;
 		do_div(low, vm_total_pages);
 
 		if (is_highmem(zone)) {
@@ -7747,8 +7784,7 @@ static void __setup_per_zone_wmarks(void)
 		 * ensure a minimum size on small systems.
 		 */
 		min = max_t(u64, min >> 2,
-			    mult_frac(zone_managed_pages(zone),
-				      watermark_scale_factor, 10000));
+			    mult_frac(managed, watermark_scale_factor, 10000));
 
 		zone->watermark[WMARK_LOW]  = min_wmark_pages(zone) +
 					low + min;
