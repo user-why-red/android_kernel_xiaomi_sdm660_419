@@ -702,6 +702,7 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 	unsigned long start_pfn = low_pfn;
 	bool skip_on_failure = false;
 	unsigned long next_skip_pfn = 0;
+	unsigned int isolated_stalls = 0;
 
 	/*
 	 * Ensure that there are not too many pages isolated from the LRU
@@ -713,7 +714,10 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 		if (cc->mode == MIGRATE_ASYNC)
 			return 0;
 
-		congestion_wait(BLK_RW_ASYNC, HZ/10);
+		if (++isolated_stalls > 4)
+			return 0;
+
+		congestion_wait(BLK_RW_ASYNC, msecs_to_jiffies(20));
 
 		if (fatal_signal_pending(current))
 			return 0;
