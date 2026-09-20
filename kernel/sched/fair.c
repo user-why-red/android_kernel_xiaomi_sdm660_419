@@ -626,6 +626,10 @@ static inline int entity_before(struct sched_entity *a,
 	return (s64)(a->vruntime - b->vruntime) < 0;
 }
 
+#ifdef CONFIG_SCHED_EEVDF
+#include "fair_eevdf.c"
+#endif
+
 static void update_min_vruntime(struct cfs_rq *cfs_rq)
 {
 	struct sched_entity *curr = cfs_rq->curr;
@@ -651,6 +655,14 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 	}
 
 	/* ensure we never gain time by being placed backwards. */
+#ifdef CONFIG_SCHED_EEVDF
+	{
+		s64 delta = (s64)(vruntime - cfs_rq->min_vruntime);
+
+		if (delta > 0)
+			avg_vruntime_update(cfs_rq, delta);
+	}
+#endif
 	cfs_rq->min_vruntime = max_vruntime(cfs_rq->min_vruntime, vruntime);
 #ifndef CONFIG_64BIT
 	smp_wmb();
@@ -664,6 +676,9 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	struct rb_node **link = &cfs_rq->tasks_timeline.rb_root.rb_node;
+#ifdef CONFIG_SCHED_EEVDF
+	avg_vruntime_add(cfs_rq, se);
+#endif
 	struct rb_node *parent = NULL;
 	struct sched_entity *entry;
 	bool leftmost = true;
@@ -694,6 +709,9 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	rb_erase_cached(&se->run_node, &cfs_rq->tasks_timeline);
+#ifdef CONFIG_SCHED_EEVDF
+	avg_vruntime_sub(cfs_rq, se);
+#endif
 }
 
 struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq)
