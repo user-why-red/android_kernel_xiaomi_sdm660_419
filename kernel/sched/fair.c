@@ -5982,8 +5982,11 @@ static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	 */
 	schedtune_dequeue_task(p, cpu_of(rq));
 
-	if (task_sleep)
+	if (task_sleep) {
+		if (rq->curr == p)
+			update_curr(cfs_rq_of(&p->se));
 		restart_burst_bore(p);
+	}
 
 	util_est_dequeue(&rq->cfs, p);
 
@@ -8985,6 +8988,8 @@ static void yield_task_fair(struct rq *rq)
 	 * Are we the only task in the tree?
 	 */
 	if (unlikely(rq->nr_running == 1)) {
+		update_rq_clock(rq);
+		update_curr(cfs_rq);
 		restart_burst_bore(curr);
 		return;
 	}
