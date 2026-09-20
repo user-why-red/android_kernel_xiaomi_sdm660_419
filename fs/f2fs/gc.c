@@ -1893,11 +1893,12 @@ retry:
 				goto go_gc_more;
 			goto stop;
 		}
-		if (sbi->skipped_gc_rwsem)
+		if (sbi->skipped_gc_rwsem || !seg_freed)
 			skipped_round++;
 		round++;
-		if (skipped_round > MAX_SKIP_GC_COUNT &&
-				skipped_round * 2 >= round) {
+		if ((skipped_round > MAX_SKIP_GC_COUNT &&
+				skipped_round * 2 >= round) ||
+				round > MAX_SKIP_GC_COUNT * 3) {
 			ret = f2fs_write_checkpoint(sbi, &cpc);
 			goto stop;
 		}
