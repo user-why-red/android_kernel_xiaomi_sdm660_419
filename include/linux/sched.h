@@ -566,6 +566,13 @@ struct sched_entity {
 	struct sched_avg		avg;
 #endif
 
+#ifdef CONFIG_SCHED_EEVDF
+	u64				deadline;
+	u64				min_vruntime;
+	s64				vlag;
+	u64				slice;
+#endif
+
 	ANDROID_KABI_RESERVE(1);
 	ANDROID_KABI_RESERVE(2);
 	ANDROID_KABI_RESERVE(3);

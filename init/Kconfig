@@ -1271,6 +1271,16 @@ config SCHED_CASS
 	  their lowest P-state necessary to satisfy the overall load at any
 	  given moment.
 
+config SCHED_EEVDF
+	bool "EEVDF fair pick (6.11 policy)"
+	depends on SMP
+	depends on !SCHED_WALT
+	default n
+	help
+	  Earliest Eligible Virtual Deadline First instead of CFS
+	  leftmost vruntime. CASS placement is unchanged. When
+	  disabled, CFS + vruntime BORE is unchanged.
+
 config SCHED_BORE
 	bool "Burst-Oriented Response Enhancer"
 	default y

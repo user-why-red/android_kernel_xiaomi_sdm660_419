@@ -12975,6 +12975,10 @@ void init_cfs_rq(struct cfs_rq *cfs_rq)
 {
 	cfs_rq->tasks_timeline = RB_ROOT_CACHED;
 	cfs_rq->min_vruntime = (u64)(-(1LL << 20));
+#ifdef CONFIG_SCHED_EEVDF
+	cfs_rq->avg_vruntime = 0;
+	cfs_rq->avg_load = 0;
+#endif
 #ifndef CONFIG_64BIT
 	cfs_rq->min_vruntime_copy = cfs_rq->min_vruntime;
 #endif
