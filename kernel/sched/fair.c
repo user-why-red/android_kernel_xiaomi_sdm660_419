@@ -675,10 +675,11 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
  */
 static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	struct rb_node **link = &cfs_rq->tasks_timeline.rb_root.rb_node;
 #ifdef CONFIG_SCHED_EEVDF
-	avg_vruntime_add(cfs_rq, se);
+	eevdf_enqueue_entity(cfs_rq, se);
+	return;
 #endif
+	struct rb_node **link = &cfs_rq->tasks_timeline.rb_root.rb_node;
 	struct rb_node *parent = NULL;
 	struct sched_entity *entry;
 	bool leftmost = true;
@@ -708,10 +709,11 @@ static void __enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 
 static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
-	rb_erase_cached(&se->run_node, &cfs_rq->tasks_timeline);
 #ifdef CONFIG_SCHED_EEVDF
-	avg_vruntime_sub(cfs_rq, se);
+	eevdf_dequeue_entity(cfs_rq, se);
+	return;
 #endif
+	rb_erase_cached(&se->run_node, &cfs_rq->tasks_timeline);
 }
 
 struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq)
@@ -4828,6 +4830,9 @@ wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se);
 static struct sched_entity *
 pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 {
+#ifdef CONFIG_SCHED_EEVDF
+	return pick_eevdf(cfs_rq);
+#endif
 	struct sched_entity *left = __pick_first_entity(cfs_rq);
 	struct sched_entity *se;
 

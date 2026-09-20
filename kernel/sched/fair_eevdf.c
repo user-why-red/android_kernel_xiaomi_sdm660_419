@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include <linux/rbtree_augmented.h>
 /*
  * EEVDF accounting — 6.11 policy, included from fair.c.
  *
@@ -152,4 +153,100 @@ static void update_deadline(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		resched_curr(rq_of(cfs_rq));
 		clear_buddies(cfs_rq, se);
 	}
+}
+
+#define __node_2_se(node) rb_entry((node), struct sched_entity, run_node)
+
+static inline u64 compute_min_vruntime(struct sched_entity *se)
+{
+	struct rb_node *node = &se->run_node;
+	u64 min_v = se->vruntime;
+
+	if (node->rb_left)
+		min_v = min_vruntime(min_v,
+			__node_2_se(node->rb_left)->min_vruntime);
+	if (node->rb_right)
+		min_v = min_vruntime(min_v,
+			__node_2_se(node->rb_right)->min_vruntime);
+	return min_v;
+}
+
+RB_DECLARE_CALLBACKS(static, min_vruntime_cb, struct sched_entity,
+		     run_node, u64, min_vruntime, compute_min_vruntime);
+
+static void eevdf_enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
+{
+	struct rb_node **link = &cfs_rq->tasks_timeline.rb_root.rb_node;
+	struct rb_node *parent = NULL;
+	struct sched_entity *entry;
+	bool leftmost = true;
+
+	avg_vruntime_add(cfs_rq, se);
+	se->min_vruntime = se->vruntime;
+
+	while (*link) {
+		parent = *link;
+		entry = rb_entry(parent, struct sched_entity, run_node);
+		if ((s64)(se->deadline - entry->deadline) < 0) {
+			link = &parent->rb_left;
+		} else {
+			link = &parent->rb_right;
+			leftmost = false;
+		}
+	}
+
+	rb_link_node(&se->run_node, parent, link);
+	rb_insert_augmented_cached(&se->run_node, &cfs_rq->tasks_timeline,
+				   leftmost, &min_vruntime_cb);
+}
+
+static void eevdf_dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
+{
+	rb_erase_augmented_cached(&se->run_node, &cfs_rq->tasks_timeline,
+				  &min_vruntime_cb);
+	avg_vruntime_sub(cfs_rq, se);
+}
+
+static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
+{
+	struct rb_node *node = cfs_rq->tasks_timeline.rb_root.rb_node;
+	struct sched_entity *se = __pick_first_entity(cfs_rq);
+	struct sched_entity *curr = cfs_rq->curr;
+	struct sched_entity *best = NULL;
+
+	if (cfs_rq->nr_running == 1)
+		return curr && curr->on_rq ? curr : se;
+
+	if (curr && (!curr->on_rq || !entity_eligible(cfs_rq, curr)))
+		curr = NULL;
+
+	if (sched_feat(RUN_TO_PARITY) && curr && curr->vlag == curr->deadline)
+		return curr;
+
+	if (se && entity_eligible(cfs_rq, se)) {
+		best = se;
+		goto found;
+	}
+
+	while (node) {
+		struct rb_node *left = node->rb_left;
+
+		if (left && vruntime_eligible(cfs_rq,
+				__node_2_se(left)->min_vruntime)) {
+			node = left;
+			continue;
+		}
+
+		se = __node_2_se(node);
+		if (entity_eligible(cfs_rq, se)) {
+			best = se;
+			break;
+		}
+		node = node->rb_right;
+	}
+found:
+	if (!best || (curr && (s64)(curr->deadline - best->deadline) < 0))
+		best = curr;
+
+	return best;
 }
