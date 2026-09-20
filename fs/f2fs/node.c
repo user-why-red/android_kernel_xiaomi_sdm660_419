@@ -3036,7 +3036,12 @@ static int __flush_nat_entry_set(struct f2fs_sb_info *sbi,
 		if (to_journal) {
 			offset = f2fs_lookup_journal_in_cursum(journal,
 							NAT_JOURNAL, nid, 1);
-			f2fs_bug_on(sbi, offset < 0);
+			if (offset < 0) {
+				f2fs_stop_checkpoint(sbi, false,
+					STOP_CP_REASON_CORRUPTED_SUMMARY);
+				up_write(&curseg->journal_rwsem);
+				return -EINVAL;
+			}
 			raw_ne = &nat_in_journal(journal, offset);
 			nid_in_journal(journal, offset) = cpu_to_le32(nid);
 		} else {
