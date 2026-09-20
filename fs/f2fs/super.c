@@ -1707,7 +1707,7 @@ int f2fs_sync_fs(struct super_block *sb, int sync)
 	int err = 0;
 
 	if (unlikely(f2fs_cp_error(sbi)))
-		return 0;
+		return is_sbi_flag_set(sbi, SBI_IS_CLOSE) ? 0 : -EIO;
 	if (unlikely(is_sbi_flag_set(sbi, SBI_CP_DISABLED)))
 		return 0;
 
