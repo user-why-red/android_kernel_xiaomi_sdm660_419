@@ -4441,6 +4441,8 @@ restart:
 		}
 		if (!woke_kshrinkd) {
 			atomic_long_inc(&kshrinkd_waiters);
+			smp_mb__after_atomic();
+			wake_all_kshrinkds(ac);
 			woke_kshrinkd = true;
 		}
 		if (!used_vmpressure)
