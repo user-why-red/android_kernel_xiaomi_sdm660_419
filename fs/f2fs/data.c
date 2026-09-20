@@ -2416,9 +2416,21 @@ submit_and_realloc:
 					is_readahead ? REQ_RAHEAD : 0,
 					page->index, for_write);
 			if (IS_ERR(bio)) {
+				int j;
+
 				ret = PTR_ERR(bio);
-				f2fs_decompress_end_io(dic, ret, true);
-				f2fs_put_dnode(&dn);
+				bio = NULL;
+				/*
+				 * Earlier cpages may already be in flight.
+				 * Count the ones we never submitted as done
+				 * and let completions finish the ctx.
+				 */
+				for (j = i; j < cc->nr_cpages; j++) {
+					if (atomic_dec_and_test(&dic->remaining_pages))
+						f2fs_decompress_cluster(dic, true);
+				}
+				if (from_dnode)
+					f2fs_put_dnode(&dn);
 				*bio_ret = NULL;
 				return ret;
 			}
