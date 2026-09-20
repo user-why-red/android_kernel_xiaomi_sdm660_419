@@ -387,33 +387,33 @@ static void vmpressure_global(gfp_t gfp, unsigned long scanned, bool critical,
 		scanned = calculate_vmpressure_win();
 
 	spin_lock_irqsave(&vmpr->sr_lock, flags);
-	if (scanned) {
-		vmpr->scanned += scanned;
-		vmpr->reclaimed += reclaimed;
-
-		if (!current_is_kswapd())
-			vmpr->stall += scanned;
-
-		stall = vmpr->stall;
-		scanned = vmpr->scanned;
-		reclaimed = vmpr->reclaimed;
-
-		if (!critical && scanned < calculate_vmpressure_win()) {
-			spin_unlock_irqrestore(&vmpr->sr_lock, flags);
-			return;
-		}
+	if (!scanned) {
+		spin_unlock_irqrestore(&vmpr->sr_lock, flags);
+		return;
 	}
+
+	vmpr->scanned += scanned;
+	vmpr->reclaimed += reclaimed;
+
+	if (!current_is_kswapd())
+		vmpr->stall += scanned;
+
+	stall = vmpr->stall;
+	scanned = vmpr->scanned;
+	reclaimed = vmpr->reclaimed;
+
+	if (!critical && scanned < calculate_vmpressure_win()) {
+		spin_unlock_irqrestore(&vmpr->sr_lock, flags);
+		return;
+	}
+
 	vmpr->scanned = 0;
 	vmpr->reclaimed = 0;
 	vmpr->stall = 0;
 	spin_unlock_irqrestore(&vmpr->sr_lock, flags);
 
-	if (scanned) {
-		pressure = vmpressure_calc_pressure(scanned, reclaimed);
-		pressure = vmpressure_account_stall(pressure, stall, scanned);
-	} else {
-		pressure = 100;
-	}
+	pressure = vmpressure_calc_pressure(scanned, reclaimed);
+	pressure = vmpressure_account_stall(pressure, stall, scanned);
 	vmpressure_notify(pressure);
 }
 
