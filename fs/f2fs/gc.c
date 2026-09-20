@@ -63,14 +63,21 @@ static int gc_thread_func(void *data)
 
 		if (try_to_freeze()) {
 			stat_other_skip_bggc_count(sbi);
+			if (foreground)
+				wake_up_all(fggc_wq);
 			continue;
 		}
-		if (kthread_should_stop())
+		if (kthread_should_stop()) {
+			if (foreground)
+				wake_up_all(fggc_wq);
 			break;
+		}
 
 		if (sbi->sb->s_writers.frozen >= SB_FREEZE_WRITE) {
 			increase_sleep_time(gc_th, &wait_ms);
 			stat_other_skip_bggc_count(sbi);
+			if (foreground)
+				wake_up_all(fggc_wq);
 			continue;
 		}
 
@@ -80,6 +87,8 @@ static int gc_thread_func(void *data)
 
 		if (!sb_start_write_trylock(sbi->sb)) {
 			stat_other_skip_bggc_count(sbi);
+			if (foreground)
+				wake_up_all(fggc_wq);
 			continue;
 		}
 
