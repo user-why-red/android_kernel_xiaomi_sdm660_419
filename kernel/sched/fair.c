@@ -762,13 +762,19 @@ static inline u64 calc_delta_fair(u64 delta, struct sched_entity *se)
 	if (unlikely(se->load.weight != NICE_0_LOAD))
 		delta = __calc_delta(delta, NICE_0_LOAD, &se->load);
 
-	if (entity_is_task(se)) {
-		u8 score = bore_apply_score(task_of(se));
+	return delta;
+}
 
-		if (score)
-			delta = mul_u64_u32_shr(delta,
-					sched_prio_to_wmult[score], 22);
-	}
+static inline u64 calc_delta_fair_bore(u64 delta, struct sched_entity *se)
+{
+	u8 score;
+
+	delta = calc_delta_fair(delta, se);
+	if (!entity_is_task(se))
+		return delta;
+	score = bore_apply_score(task_of(se));
+	if (score)
+		delta = mul_u64_u32_shr(delta, sched_prio_to_wmult[score], 22);
 	return delta;
 }
 
@@ -968,7 +974,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	curr->sum_exec_runtime += delta_exec;
 	schedstat_add(cfs_rq->exec_clock, delta_exec);
 
-	curr->vruntime += calc_delta_fair(delta_exec, curr);
+	curr->vruntime += calc_delta_fair_bore(delta_exec, curr);
 	update_min_vruntime(cfs_rq);
 
 	if (entity_is_task(curr)) {
