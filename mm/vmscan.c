@@ -4356,10 +4356,13 @@ static int evict_pages(struct lruvec *lruvec, struct scan_control *sc, int swapp
 	int type;
 	int scanned;
 	int reclaimed;
+	int nr_taken = 0;
+	int file;
 	LIST_HEAD(list);
 	struct page *page;
 	enum vm_event_item item;
 	struct lru_gen_mm_walk *walk;
+	struct reclaim_stat stat = {};
 	struct mem_cgroup *memcg = lruvec_memcg(lruvec);
 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
 
@@ -4373,22 +4376,29 @@ static int evict_pages(struct lruvec *lruvec, struct scan_control *sc, int swapp
 	if (get_nr_gens(lruvec, !swappiness) == MIN_NR_GENS)
 		scanned = 0;
 
+	file = (type == LRU_GEN_FILE);
+	list_for_each_entry(page, &list, lru)
+		nr_taken++;
+	if (nr_taken)
+		__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, nr_taken);
+
 	spin_unlock_irq(&pgdat->lru_lock);
 
 	if (list_empty(&list))
 		return scanned;
 
-	reclaimed = shrink_page_list(&list, pgdat, sc, 0, NULL, false);
+	reclaimed = shrink_page_list(&list, pgdat, sc, 0, &stat, false);
 
 	/*
 	 * To avoid livelock, don't add rejected pages back to the same lists
-	 * they were isolated from. See lru_gen_add_page().
+	 * they were isolated from. See lru_gen_add_page(). Dirty and
+	 * writeback pages stay inactive so they remain reclaim candidates.
 	 */
 	list_for_each_entry(page, &list, lru) {
 		ClearPageReferenced(page);
 		ClearPageWorkingset(page);
 
-		if (PageReclaim(page) && (PageDirty(page) || PageWriteback(page)))
+		if (PageDirty(page) || PageWriteback(page))
 			ClearPageActive(page);
 		else
 			SetPageActive(page);
@@ -4397,6 +4407,9 @@ static int evict_pages(struct lruvec *lruvec, struct scan_control *sc, int swapp
 	spin_lock_irq(&pgdat->lru_lock);
 
 	putback_inactive_pages(lruvec, &list);
+
+	if (nr_taken)
+		__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, -nr_taken);
 
 	walk = current->reclaim_state ? current->reclaim_state->mm_walk : NULL;
 	if (walk && walk->batched)
@@ -4411,6 +4424,18 @@ static int evict_pages(struct lruvec *lruvec, struct scan_control *sc, int swapp
 
 	mem_cgroup_uncharge_list(&list);
 	free_unref_page_list(&list);
+
+	if (stat.nr_unqueued_dirty == nr_taken)
+		wakeup_flusher_threads(WB_REASON_VMSCAN);
+
+	sc->nr.dirty += stat.nr_dirty;
+	sc->nr.congested += stat.nr_congested;
+	sc->nr.unqueued_dirty += stat.nr_unqueued_dirty;
+	sc->nr.writeback += stat.nr_writeback;
+	sc->nr.immediate += stat.nr_immediate;
+	sc->nr.taken += nr_taken;
+	if (file)
+		sc->nr.file_taken += nr_taken;
 
 	sc->nr_reclaimed += reclaimed;
 
