@@ -8,6 +8,7 @@
 #ifdef CONFIG_SCHED_BORE
 
 u32 __read_mostly sched_bore = 1;
+DEFINE_STATIC_KEY_TRUE(sched_bore_enabled);
 u32 __read_mostly sched_burst_inherit_type = 2;
 u32 __read_mostly sched_burst_smoothness = 1;
 u32 __read_mostly sched_burst_penalty_offset = 24;
@@ -71,7 +72,7 @@ void update_curr_bore(struct task_struct *p, u64 delta_exec)
 {
 	u32 curr;
 
-	if (!sched_bore)
+	if (!bore_enabled())
 		return;
 
 	p->bore.burst_time += delta_exec;
@@ -86,7 +87,7 @@ void restart_burst_bore(struct task_struct *p)
 {
 	u32 smoothed;
 
-	if (!sched_bore)
+	if (!bore_enabled())
 		return;
 
 	smoothed = binary_smooth(p->bore.curr_penalty, p->bore.prev_penalty);
@@ -101,7 +102,7 @@ void restart_burst_bore(struct task_struct *p)
 
 u8 bore_apply_score(struct task_struct *p)
 {
-	if (!sched_bore)
+	if (!bore_enabled())
 		return 0;
 	if (p->flags & PF_KTHREAD)
 		return 0;
@@ -208,7 +209,7 @@ void task_fork_bore(struct task_struct *p)
 	u64 now;
 	u32 inherited = 0;
 
-	if (!sched_bore || !bore_inheritable(p))
+	if (!bore_enabled() || !bore_inheritable(p))
 		return;
 
 	now = ktime_get_ns();
@@ -236,6 +237,10 @@ void reset_task_bore(struct task_struct *p)
 void __init sched_init_bore(void)
 {
 	reset_task_bore(&init_task);
+	if (sched_bore)
+		static_branch_enable(&sched_bore_enabled);
+	else
+		static_branch_disable(&sched_bore_enabled);
 	pr_info("BORE: CFS burst scoring\n");
 }
 
@@ -243,6 +248,22 @@ void __init sched_init_bore(void)
 static int bore_zero;
 static int bore_one = 1;
 static int bore_two = 2;
+
+static int sched_bore_sysctl(struct ctl_table *table, int write,
+			     void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret;
+
+	ret = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+	if (ret || !write)
+		return ret;
+	if (sched_bore)
+		static_branch_enable(&sched_bore_enabled);
+	else
+		static_branch_disable(&sched_bore_enabled);
+	return 0;
+}
+
 static int bore_three = 3;
 static int bore_sixfour = 64;
 static int bore_12bit = 4095;
@@ -253,7 +274,7 @@ static struct ctl_table sched_bore_table[] = {
 		.data		= &sched_bore,
 		.maxlen		= sizeof(u32),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec_minmax,
+		.proc_handler	= sched_bore_sysctl,
 		.extra1		= &bore_zero,
 		.extra2		= &bore_one,
 	},

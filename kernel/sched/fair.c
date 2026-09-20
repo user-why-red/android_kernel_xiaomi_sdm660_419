@@ -8670,7 +8670,7 @@ static void bore_wakeup_backstep(s64 *vdiff, struct sched_entity *se)
 	u64 delta_exec, scaled;
 	u8 score;
 
-	if (!sched_bore || !entity_is_task(se))
+	if (!bore_enabled() || !entity_is_task(se))
 		return;
 	p = task_of(se);
 	score = bore_apply_score(p);
