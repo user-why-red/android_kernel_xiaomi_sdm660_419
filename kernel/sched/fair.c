@@ -3060,8 +3060,21 @@ static void reweight_entity(struct cfs_rq *cfs_rq, struct sched_entity *se,
 		/* commit outstanding execution time */
 		if (cfs_rq->curr == se)
 			update_curr(cfs_rq);
+#ifdef CONFIG_SCHED_EEVDF
+		{
+			u64 avruntime = avg_vruntime(cfs_rq);
+
+			if (cfs_rq->curr != se)
+				__dequeue_entity(cfs_rq, se);
+			reweight_eevdf(se, avruntime, weight);
+		}
+#endif
 		account_entity_dequeue(cfs_rq, se);
 		dequeue_runnable_load_avg(cfs_rq, se);
+#ifdef CONFIG_SCHED_EEVDF
+	} else if (weight) {
+		se->vlag = div_s64(se->vlag * se->load.weight, weight);
+#endif
 	}
 	dequeue_load_avg(cfs_rq, se);
 
@@ -3082,6 +3095,10 @@ static void reweight_entity(struct cfs_rq *cfs_rq, struct sched_entity *se,
 	if (se->on_rq) {
 		account_entity_enqueue(cfs_rq, se);
 		enqueue_runnable_load_avg(cfs_rq, se);
+#ifdef CONFIG_SCHED_EEVDF
+		if (cfs_rq->curr != se)
+			__enqueue_entity(cfs_rq, se);
+#endif
 	}
 }
 
