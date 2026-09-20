@@ -78,3 +78,50 @@ static int entity_eligible(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	return vruntime_eligible(cfs_rq, se->vruntime);
 }
+
+static s64 entity_lag(u64 avruntime, struct sched_entity *se)
+{
+	s64 vlag, limit;
+	u64 slice = se->slice;
+
+	if (!slice)
+		slice = sysctl_sched_min_granularity;
+
+	vlag = avruntime - se->vruntime;
+	limit = calc_delta_fair(max_t(u64, 2 * slice, TICK_NSEC), se);
+
+	return clamp(vlag, -limit, limit);
+}
+
+static void update_entity_lag(struct cfs_rq *cfs_rq, struct sched_entity *se)
+{
+	WARN_ON_ONCE(!se->on_rq);
+	se->vlag = entity_lag(avg_vruntime(cfs_rq), se);
+}
+
+static void eevdf_place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se,
+			       int initial)
+{
+	u64 vruntime = avg_vruntime(cfs_rq);
+	s64 lag = 0;
+
+	if (!se->slice)
+		se->slice = sysctl_sched_min_granularity;
+
+	if (sched_feat(PLACE_LAG) && cfs_rq->nr_running) {
+		struct sched_entity *curr = cfs_rq->curr;
+		unsigned long load;
+
+		lag = se->vlag;
+		load = cfs_rq->avg_load;
+		if (curr && curr->on_rq)
+			load += scale_load_down(curr->load.weight);
+
+		lag *= load + scale_load_down(se->load.weight);
+		if (WARN_ON_ONCE(!load))
+			load = 1;
+		lag = div_s64(lag, load);
+	}
+
+	se->vruntime = vruntime - lag;
+}

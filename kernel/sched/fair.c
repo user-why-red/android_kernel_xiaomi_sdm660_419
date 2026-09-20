@@ -4454,6 +4454,10 @@ static inline bool entity_is_long_sleeper(struct sched_entity *se)
 static void
 place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 {
+#ifdef CONFIG_SCHED_EEVDF
+	eevdf_place_entity(cfs_rq, se, initial);
+	return;
+#endif
 	u64 vruntime = cfs_rq->min_vruntime;
 
 	/*
@@ -4696,6 +4700,9 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 
 	clear_buddies(cfs_rq, se);
 
+#ifdef CONFIG_SCHED_EEVDF
+	update_entity_lag(cfs_rq, se);
+#endif
 	if (se != cfs_rq->curr)
 		__dequeue_entity(cfs_rq, se);
 	se->on_rq = 0;

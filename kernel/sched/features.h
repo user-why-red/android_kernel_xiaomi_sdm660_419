@@ -4,6 +4,10 @@
  * them to run sooner, but does not allow tons of sleepers to
  * rip the spread apart.
  */
+#ifdef CONFIG_SCHED_EEVDF
+#define SCHED_FEAT_PLACE_LAG 1
+#endif
+
 #define SCHED_FEAT_GENTLE_FAIR_SLEEPERS 1
 
 /*
