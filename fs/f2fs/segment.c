@@ -2549,9 +2549,9 @@ static int is_next_segment_free(struct f2fs_sb_info *sbi,
 
 /*
  * Find a new segment from the free segments bitmap to right order
- * This function should be returned with success, otherwise BUG
+ * This function should be returned with success
  */
-static void get_new_segment(struct f2fs_sb_info *sbi,
+static bool get_new_segment(struct f2fs_sb_info *sbi,
 			unsigned int *newseg, bool new_sec, int dir)
 {
 	struct free_segmap_info *free_i = FREE_I(sbi);
@@ -2578,7 +2578,10 @@ find_other_zone:
 		if (dir == ALLOC_RIGHT) {
 			secno = find_next_zero_bit(free_i->free_secmap,
 							MAIN_SECS(sbi), 0);
-			f2fs_bug_on(sbi, secno >= MAIN_SECS(sbi));
+			if (secno >= MAIN_SECS(sbi)) {
+				spin_unlock(&free_i->segmap_lock);
+				return false;
+			}
 		} else {
 			go_left = 1;
 			left_start = hint - 1;
@@ -2594,7 +2597,10 @@ find_other_zone:
 		}
 		left_start = find_next_zero_bit(free_i->free_secmap,
 							MAIN_SECS(sbi), 0);
-		f2fs_bug_on(sbi, left_start >= MAIN_SECS(sbi));
+		if (left_start >= MAIN_SECS(sbi)) {
+			spin_unlock(&free_i->segmap_lock);
+			return false;
+		}
 		break;
 	}
 	secno = left_start;
@@ -2631,11 +2637,13 @@ skip_left:
 		goto find_other_zone;
 	}
 got_it:
-	/* set it as dirty segment in free segmap */
-	f2fs_bug_on(sbi, test_bit(segno, free_i->free_segmap));
-	__set_inuse(sbi, segno);
+	if (segno >= MAIN_SEGS(sbi) || !__set_inuse(sbi, segno)) {
+		spin_unlock(&free_i->segmap_lock);
+		return false;
+	}
 	*newseg = segno;
 	spin_unlock(&free_i->segmap_lock);
+	return true;
 }
 
 static void reset_curseg(struct f2fs_sb_info *sbi, int type, int modified)
@@ -2717,7 +2725,10 @@ static void new_curseg(struct f2fs_sb_info *sbi, int type, bool new_sec)
 		dir = ALLOC_RIGHT;
 
 	segno = __get_next_segno(sbi, type);
-	get_new_segment(sbi, &segno, new_sec, dir);
+	if (!get_new_segment(sbi, &segno, new_sec, dir)) {
+		f2fs_stop_checkpoint(sbi, false, STOP_CP_REASON_WRITE_FAIL);
+		return;
+	}
 	curseg->next_segno = segno;
 	reset_curseg(sbi, type, 1);
 	curseg->alloc_type = LFS;
