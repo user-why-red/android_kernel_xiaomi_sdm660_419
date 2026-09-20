@@ -1779,11 +1779,17 @@ bool f2fs_issue_discard_timeout(struct f2fs_sb_info *sbi)
 	__issue_discard_cmd(sbi, &dpolicy);
 	dropped = __drop_discard_cmd(sbi);
 
-	/* just to make sure there is no pending discard commands */
 	__wait_all_discard_cmd(sbi, NULL);
 
-	f2fs_bug_on(sbi, atomic_read(&dcc->discard_cmd_cnt));
-	return !dropped;
+	if (atomic_read(&dcc->discard_cmd_cnt)) {
+		unsigned int i;
+
+		for (i = 0; i < 10 && atomic_read(&dcc->discard_cmd_cnt); i++) {
+			io_schedule_timeout(HZ / 10);
+			__wait_all_discard_cmd(sbi, NULL);
+		}
+	}
+	return !dropped && !atomic_read(&dcc->discard_cmd_cnt);
 }
 
 static int issue_discard_thread(void *data)
@@ -2240,6 +2246,13 @@ static void destroy_discard_cmd_control(struct f2fs_sb_info *sbi)
 	 * fill_super(), it needs to give a chance to handle them.
 	 */
 	f2fs_issue_discard_timeout(sbi);
+
+	if (atomic_read(&dcc->discard_cmd_cnt)) {
+		f2fs_err(sbi, "discard cmds leftover: %d",
+			 atomic_read(&dcc->discard_cmd_cnt));
+		SM_I(sbi)->dcc_info = NULL;
+		return;
+	}
 
 	kfree(dcc);
 	SM_I(sbi)->dcc_info = NULL;
