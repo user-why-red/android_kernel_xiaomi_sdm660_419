@@ -842,6 +842,7 @@ struct bore_ctx {
 	u32	child_burst_cnt;
 	u64	child_burst_cached;
 	u64	group_burst_cached;
+	u8	stop_update;
 };
 #endif
 

@@ -81,6 +81,9 @@ void update_curr_bore(struct task_struct *p, u64 delta_exec)
 	if (curr <= p->bore.prev_penalty)
 		return;
 	bore_set_penalty(p);
+#ifdef CONFIG_SCHED_EEVDF
+	bore_eevdf_commit(p);
+#endif
 }
 
 void restart_burst_bore(struct task_struct *p)
@@ -95,6 +98,9 @@ void restart_burst_bore(struct task_struct *p)
 	p->bore.curr_penalty = 0;
 	p->bore.burst_time = 0;
 	bore_set_penalty(p);
+#ifdef CONFIG_SCHED_EEVDF
+	bore_eevdf_commit(p);
+#endif
 }
 
 #define BORE_CACHE_SAMPLE 63
@@ -120,6 +126,10 @@ u8 bore_apply_score(struct task_struct *p)
 #endif
 	return bore_score(p);
 }
+
+#ifdef CONFIG_SCHED_EEVDF
+#include "bore_eevdf.c"
+#endif
 
 static bool bore_inheritable(struct task_struct *p)
 {
@@ -227,6 +237,9 @@ void task_fork_bore(struct task_struct *p)
 	p->bore.curr_penalty = 0;
 	p->bore.burst_time = 0;
 	bore_set_penalty(p);
+#ifdef CONFIG_SCHED_EEVDF
+	bore_eevdf_commit(p);
+#endif
 }
 
 void reset_task_bore(struct task_struct *p)
