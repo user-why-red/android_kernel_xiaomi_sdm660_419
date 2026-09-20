@@ -107,10 +107,15 @@ u8 bore_apply_score(struct task_struct *p)
 		return 0;
 	if (p->policy == SCHED_BATCH || p->policy == SCHED_IDLE)
 		return 0;
-#ifdef CONFIG_UCLAMP_TASK
-	if (uclamp_is_used() &&
-	    uclamp_eff_value(p, UCLAMP_MAX) < SCHED_CAPACITY_SCALE / 5)
+	if ((p->flags & PF_WAKE_UP_IDLE) || schedtune_prefer_idle(p))
 		return 0;
+#ifdef CONFIG_UCLAMP_TASK
+	if (uclamp_is_used()) {
+		if (uclamp_eff_value(p, UCLAMP_MAX) < SCHED_CAPACITY_SCALE / 5)
+			return 0;
+		if (uclamp_eff_value(p, UCLAMP_MIN))
+			return 0;
+	}
 #endif
 	return bore_score(p);
 }
