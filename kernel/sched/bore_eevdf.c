@@ -23,6 +23,8 @@ static void bore_eevdf_commit(struct task_struct *p)
 		return;
 	if (p->sched_class != &fair_sched_class)
 		return;
+	if (!p->se.deadline)
+		return;
 
 	p->bore.stop_update = 1;
 	reweight_task(p, effective_prio_bore(p));

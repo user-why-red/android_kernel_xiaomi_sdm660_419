@@ -181,6 +181,11 @@ static void eevdf_enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 	struct sched_entity *entry;
 	bool leftmost = true;
 
+	if (!se->slice)
+		se->slice = sysctl_sched_min_granularity;
+	if (!se->deadline)
+		se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
+
 	avg_vruntime_add(cfs_rq, se);
 	se->min_vruntime = se->vruntime;
 
@@ -220,7 +225,8 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
 	if (curr && (!curr->on_rq || !entity_eligible(cfs_rq, curr)))
 		curr = NULL;
 
-	if (sched_feat(RUN_TO_PARITY) && curr && curr->vlag == curr->deadline)
+	if (sched_feat(RUN_TO_PARITY) && curr && curr->deadline &&
+	    curr->vlag == curr->deadline)
 		return curr;
 
 	if (se && entity_eligible(cfs_rq, se)) {
@@ -245,8 +251,13 @@ static struct sched_entity *pick_eevdf(struct cfs_rq *cfs_rq)
 		node = node->rb_right;
 	}
 found:
-	if (!best || (curr && (s64)(curr->deadline - best->deadline) < 0))
+	if (!best || (curr && curr->deadline &&
+	    (s64)(curr->deadline - best->deadline) < 0))
 		best = curr;
+	if (!best)
+		best = curr ? curr : se;
+	if (!best)
+		best = __pick_first_entity(cfs_rq);
 
 	return best;
 }
