@@ -2343,7 +2343,12 @@ int f2fs_read_multi_pages(struct compress_ctx *cc, struct bio **bio_ret,
 		ret = -EIO;
 		goto out_put_dnode;
 	}
-	f2fs_bug_on(sbi, dn.data_blkaddr != COMPRESS_ADDR);
+	if (f2fs_sanity_check_cluster(&dn) ||
+	    dn.data_blkaddr != COMPRESS_ADDR) {
+		f2fs_handle_error(sbi, ERROR_CORRUPTED_CLUSTER);
+		ret = -EFSCORRUPTED;
+		goto out_put_dnode;
+	}
 
 skip_reading_dnode:
 	for (i = 1; i < cc->cluster_size; i++) {
@@ -2356,8 +2361,9 @@ skip_reading_dnode:
 		if (!__is_valid_data_blkaddr(blkaddr))
 			break;
 
-		if (!f2fs_is_valid_blkaddr(sbi, blkaddr, DATA_GENERIC)) {
-			ret = -EFAULT;
+		if (!f2fs_is_valid_blkaddr(sbi, blkaddr,
+					DATA_GENERIC_ENHANCE_READ)) {
+			ret = -EFSCORRUPTED;
 			goto out_put_dnode;
 		}
 		cc->nr_cpages++;
