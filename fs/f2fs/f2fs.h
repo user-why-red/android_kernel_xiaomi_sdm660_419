@@ -2185,7 +2185,9 @@ static inline int f2fs_rwsem_is_contended(struct f2fs_rwsem *sem)
 static inline void f2fs_down_read(struct f2fs_rwsem *sem)
 {
 #ifdef CONFIG_F2FS_UNFAIR_RWSEM
-	wait_event(sem->read_waiters, down_read_trylock(&sem->internal_rwsem));
+	wait_event(sem->read_waiters,
+		!rwsem_is_contended(&sem->internal_rwsem) &&
+		down_read_trylock(&sem->internal_rwsem));
 #else
 	down_read(&sem->internal_rwsem);
 #endif
