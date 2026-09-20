@@ -175,14 +175,14 @@ bool cass_cpu_better(const struct cass_cpu_cand *a,
 		}
 	}
 
+	if (prefer_high_cap && cass_cmp(a->cap_max, b->cap_max))
+		goto done;
+
 	/* Relative util, fixed-point. Integer div truncated this to 0/0
 	 * until a CPU was over capacity, so the primary key never fired.
 	 */
 	if (cass_cmp(b->eff_util * SCHED_CAPACITY_SCALE / max(b->cap_max, 1UL),
 		     a->eff_util * SCHED_CAPACITY_SCALE / max(a->cap_max, 1UL)))
-		goto done;
-
-	if (prefer_high_cap && cass_cmp(a->cap_max, b->cap_max))
 		goto done;
 
 	if (cass_cmp(cass_fits_cap(p_util, a->cap_max),
