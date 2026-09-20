@@ -2038,6 +2038,9 @@ extern void init_sched_rt_class(void);
 extern void init_sched_fair_class(void);
 
 extern void reweight_task(struct task_struct *p, int prio);
+#if defined(CONFIG_SCHED_EEVDF) && defined(CONFIG_SCHED_BORE)
+void sched_eevdf_apply_slice(struct sched_entity *se, u64 slice);
+#endif
 
 extern void resched_curr(struct rq *rq);
 extern void resched_cpu(int cpu);

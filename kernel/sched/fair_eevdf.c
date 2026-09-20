@@ -281,3 +281,15 @@ static void reweight_eevdf(struct sched_entity *se, u64 avruntime,
 	vslice = div_s64(vslice * old_weight, weight);
 	se->deadline = avruntime + vslice;
 }
+
+void sched_eevdf_apply_slice(struct sched_entity *se, u64 slice)
+{
+	u64 vslice;
+
+	if (!slice)
+		slice = sysctl_sched_min_granularity;
+	se->slice = slice;
+	vslice = calc_delta_fair(slice, se);
+	if ((s64)(se->deadline - se->vruntime) > (s64)vslice)
+		se->deadline = se->vruntime + vslice;
+}
