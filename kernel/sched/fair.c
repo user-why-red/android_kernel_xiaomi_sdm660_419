@@ -992,7 +992,12 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	curr->sum_exec_runtime += delta_exec;
 	schedstat_add(cfs_rq->exec_clock, delta_exec);
 
+#ifdef CONFIG_SCHED_EEVDF
+	curr->vruntime += calc_delta_fair(delta_exec, curr);
+	update_deadline(cfs_rq, curr);
+#else
 	curr->vruntime += calc_delta_fair_bore(delta_exec, curr);
+#endif
 	update_min_vruntime(cfs_rq);
 
 	if (entity_is_task(curr)) {

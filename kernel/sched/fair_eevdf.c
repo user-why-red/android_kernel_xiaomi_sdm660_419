@@ -124,4 +124,32 @@ static void eevdf_place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se,
 	}
 
 	se->vruntime = vruntime - lag;
+
+	if (!se->slice)
+		se->slice = sysctl_sched_min_granularity;
+	{
+		u64 vslice = calc_delta_fair(se->slice, se);
+
+		if (sched_feat(PLACE_DEADLINE_INITIAL) && initial)
+			vslice /= 2;
+		se->deadline = se->vruntime + vslice;
+	}
+}
+
+static void clear_buddies(struct cfs_rq *cfs_rq, struct sched_entity *se);
+
+static void update_deadline(struct cfs_rq *cfs_rq, struct sched_entity *se)
+{
+	if ((s64)(se->vruntime - se->deadline) < 0)
+		return;
+
+	if (!se->slice)
+		se->slice = sysctl_sched_min_granularity;
+
+	se->deadline = se->vruntime + calc_delta_fair(se->slice, se);
+
+	if (cfs_rq->nr_running > 1) {
+		resched_curr(rq_of(cfs_rq));
+		clear_buddies(cfs_rq, se);
+	}
 }
