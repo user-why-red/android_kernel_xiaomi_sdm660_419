@@ -12921,6 +12921,7 @@ static void switched_from_fair(struct rq *rq, struct task_struct *p)
 
 static void switched_to_fair(struct rq *rq, struct task_struct *p)
 {
+	reset_task_bore(p);
 	attach_task_cfs_rq(p);
 
 	if (task_on_rq_queued(p)) {
