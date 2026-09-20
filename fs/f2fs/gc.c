@@ -1569,21 +1569,26 @@ next_step:
 			int err;
 
 			inode = f2fs_iget(sb, dni.ino);
-			if (IS_ERR(inode) || is_bad_inode(inode) ||
+			if (IS_ERR(inode)) {
+				set_sbi_flag(sbi, SBI_NEED_FSCK);
+				continue;
+			}
+			if (is_bad_inode(inode) ||
 					special_file(inode->i_mode)) {
 				set_sbi_flag(sbi, SBI_NEED_FSCK);
+				add_gc_inode(gc_list, inode);
 				continue;
 			}
 
 			err = f2fs_gc_pinned_control(inode, gc_type, segno);
 			if (err == -EAGAIN) {
-				iput(inode);
+				add_gc_inode(gc_list, inode);
 				return submitted;
 			}
 
 			if (!f2fs_down_write_trylock(
 				&F2FS_I(inode)->i_gc_rwsem[WRITE])) {
-				iput(inode);
+				add_gc_inode(gc_list, inode);
 				sbi->skipped_gc_rwsem++;
 				continue;
 			}
@@ -1596,7 +1601,7 @@ next_step:
 
 				f2fs_up_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
 				if (err) {
-					iput(inode);
+					add_gc_inode(gc_list, inode);
 					continue;
 				}
 				add_gc_inode(gc_list, inode);
@@ -1607,7 +1612,7 @@ next_step:
 							REQ_RAHEAD, true, NULL);
 			f2fs_up_write(&F2FS_I(inode)->i_gc_rwsem[WRITE]);
 			if (IS_ERR(data_page)) {
-				iput(inode);
+				add_gc_inode(gc_list, inode);
 				continue;
 			}
 
