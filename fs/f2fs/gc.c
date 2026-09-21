@@ -182,7 +182,6 @@ next:
 
 int f2fs_start_gc_thread(struct f2fs_sb_info *sbi)
 {
-	const struct sched_param param = { .sched_priority = 0 };
 	struct f2fs_gc_kthread *gc_th;
 	dev_t dev = sbi->sb->s_bdev->bd_dev;
 
