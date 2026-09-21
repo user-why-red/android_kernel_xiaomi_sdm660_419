@@ -136,7 +136,9 @@ jobs:
       # 7. SETUP TOOLCHAIN ENV
       # ------------------------------------------------------------------
       - name: Setup toolchain PATH
-        run: echo "$TC_DIR/bin" >> "$GITHUB_PATH"
+        run: |
+          rm -f "$TC_DIR/bin/ld"
+          echo "$TC_DIR/bin" >> "$GITHUB_PATH"
 
       - name: Show toolchain info
         run: |
