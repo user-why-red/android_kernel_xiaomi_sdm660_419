@@ -1,6 +1,6 @@
+# asuna-runner 4
 name: asuna-kernel
 run-name: ${{ inputs.build_id }}
-
 on:
   workflow_dispatch:
     inputs:
@@ -13,81 +13,116 @@ on:
       defconfig:
         required: true
         type: string
-      revision:
-        required: true
-        type: string
       localversion:
         required: false
+        type: string
         default: asuna
+      toolchain:
+        required: false
         type: string
-      clang_tag:
-        required: true
+        default: neutron:06092026
+      make_args:
+        required: false
         type: string
-
+        default: "ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_COMPAT=arm-linux-gnueabi- LLVM=1 LLVM_IAS=1"
+      image_path:
+        required: false
+        type: string
+        default: arch/arm64/boot/Image.gz-dtb
+      ak3_url:
+        required: false
+        type: string
+        default: https://github.com/user-why-red/AnyKernel3/raw/san-kernel-sdm660-installer/San-Kernel-testbuild.zip
 permissions:
   contents: read
-
 jobs:
-  kernel:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 180
+  build:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
           fetch-depth: 1
-
       - name: packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            bc bison flex libssl-dev libelf-dev dwarves \
-            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zstd zip
-
-      - name: neutron
+          sudo apt-get install -y --no-install-recommends bc bison flex libssl-dev libelf-dev zip unzip curl ca-certificates gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+      - name: toolchain
         env:
-          CLANG_TAG: ${{ inputs.clang_tag }}
+          TOOLCHAIN: ${{ inputs.toolchain }}
         run: |
-          case "$CLANG_TAG" in
-            *[!0-9]*) echo "bad clang tag" >&2; exit 1 ;;
+          set -euo pipefail
+          dest="$HOME/toolchains/asuna"
+          rm -rf "$dest"
+          mkdir -p "$dest"
+          case "$TOOLCHAIN" in
+            neutron:*)
+              rest="${TOOLCHAIN#neutron:}"
+              mkdir -p "$HOME/toolchains/neutron-clang"
+              cd "$HOME/toolchains/neutron-clang"
+              bash <(curl -fsSL https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman) -S="$rest"
+              echo "$HOME/toolchains/neutron-clang/bin" >> "$GITHUB_PATH"
+              ;;
+            git:*)
+              rest="${TOOLCHAIN#git:}"
+              git clone --depth 1 "$rest" "$dest/src"
+              bin=$(find "$dest/src" -type f -name clang -printf '%h\n' | head -n 1)
+              test -n "$bin"
+              echo "$bin" >> "$GITHUB_PATH"
+              ;;
+            archive:*)
+              rest="${TOOLCHAIN#archive:}"
+              curl -fsSL -A asuna -o "$dest/tc.tgz" "$rest"
+              mkdir -p "$dest/src"
+              tar -C "$dest/src" -xf "$dest/tc.tgz"
+              bin=$(find "$dest/src" -type f -name clang -printf '%h\n' | head -n 1)
+              test -n "$bin"
+              echo "$bin" >> "$GITHUB_PATH"
+              ;;
+            *)
+              echo "unknown toolchain: $TOOLCHAIN" >&2
+              exit 1
+              ;;
           esac
-          curl -fsSL -o clang.tar.zst \
-            "https://github.com/Neutron-Toolchains/clang-build-catalogue/releases/download/${CLANG_TAG}/neutron-clang-${CLANG_TAG}.tar.zst"
-          mkdir -p "$RUNNER_TEMP/neutron"
-          tar -I zstd -xf clang.tar.zst -C "$RUNNER_TEMP/neutron"
-          bin="$(find "$RUNNER_TEMP/neutron" -type d -name bin -print -quit)"
-          echo "$bin" >> "$GITHUB_PATH"
-
-      - name: build
+      - name: make
         env:
+          MAKE_ARGS: ${{ inputs.make_args }}
           DEFCONFIG: ${{ inputs.defconfig }}
-          REVISION: ${{ inputs.revision }}
           LOCALVERSION: ${{ inputs.localversion }}
         run: |
-          case "$DEFCONFIG" in
-            *..*|[[:space:]]*|/*|*[!A-Za-z0-9_./+-]*) echo "bad defconfig" >&2; exit 1 ;;
-          esac
-          case "$REVISION" in
-            4.4|4.19) ;;
-            *) echo "bad revision" >&2; exit 1 ;;
-          esac
-          export ARCH=arm64 LLVM=1 LLVM_IAS=1
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          if [ "$REVISION" = "4.4" ]; then
-            export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-          else
-            export CROSS_COMPILE_COMPACT=arm-linux-gnueabi-
-          fi
+          set -euo pipefail
+          args=()
+          # shellcheck disable=SC2206
+          args=($MAKE_ARGS)
           if [ -n "$LOCALVERSION" ]; then
-            export LOCALVERSION="-${LOCALVERSION#-}"
+            args+=("LOCALVERSION=-$LOCALVERSION")
           fi
-          make -j"$(nproc)" O=out "$DEFCONFIG"
-          make -j"$(nproc)" O=out Image.gz-dtb
-          test -f out/arch/arm64/boot/Image.gz-dtb
-          zip -j kernel.zip out/arch/arm64/boot/Image.gz-dtb
-
+          make -j"$(nproc)" O=out "${args[@]}" "$DEFCONFIG"
+          make -j"$(nproc)" O=out "${args[@]}"
+      - name: zip
+        id: pack
+        env:
+          IMAGE_PATH: ${{ inputs.image_path }}
+          AK3_URL: ${{ inputs.ak3_url }}
+        run: |
+          set -euo pipefail
+          image="$GITHUB_WORKSPACE/out/$IMAGE_PATH"
+          test -f "$image"
+          curl -fsSL -o "$RUNNER_TEMP/ak3.zip" "$AK3_URL"
+          rm -rf "$RUNNER_TEMP/ak3"
+          mkdir -p "$RUNNER_TEMP/ak3"
+          unzip -q "$RUNNER_TEMP/ak3.zip" -d "$RUNNER_TEMP/ak3"
+          root="$(find "$RUNNER_TEMP/ak3" -name anykernel.sh -printf '%h\n' | head -n 1)"
+          test -n "$root"
+          base="$(basename "$IMAGE_PATH")"
+          rm -f "$root/Image" "$root/Image.gz" "$root/Image.gz-dtb" "$root/$base"
+          cp "$image" "$root/$base"
+          name="${GITHUB_REPOSITORY#*/}-$(TZ=Asia/Kolkata date +%Y%m%d-%H%M).zip"
+          (cd "$root" && zip -r9 "$RUNNER_TEMP/$name" .)
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "path=$RUNNER_TEMP/$name" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
-          name: kernel-${{ inputs.build_id }}
-          path: kernel.zip
+          name: ${{ steps.pack.outputs.name }}
+          path: ${{ steps.pack.outputs.path }}
           if-no-files-found: error
