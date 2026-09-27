@@ -1,4 +1,4 @@
-# asuna-runner 4
+# asuna-runner 5
 name: asuna-kernel
 run-name: ${{ inputs.build_id }}
 on:
@@ -51,10 +51,19 @@ jobs:
         env:
           TOOLCHAIN: ${{ inputs.toolchain }}
         run: |
-          set -euo pipefail
+          set -eu
           dest="$HOME/toolchains/asuna"
           rm -rf "$dest"
           mkdir -p "$dest"
+          take() {
+            bin=$(find "$dest/src" \( -type f -o -type l \) -name clang -print -quit)
+            if [ -z "$bin" ]; then
+              echo "clang not in archive" >&2
+              find "$dest/src" -maxdepth 4 -type d -name bin >&2 || true
+              exit 1
+            fi
+            dirname "$bin" >> "$GITHUB_PATH"
+          }
           case "$TOOLCHAIN" in
             neutron:*)
               rest="${TOOLCHAIN#neutron:}"
@@ -66,18 +75,16 @@ jobs:
             git:*)
               rest="${TOOLCHAIN#git:}"
               git clone --depth 1 "$rest" "$dest/src"
-              bin=$(find "$dest/src" -type f -name clang -printf '%h\n' | head -n 1)
-              test -n "$bin"
-              echo "$bin" >> "$GITHUB_PATH"
+              take
               ;;
             archive:*)
               rest="${TOOLCHAIN#archive:}"
-              curl -fsSL -A asuna -o "$dest/tc.tgz" "$rest"
+              echo "fetch $rest"
+              curl -fL --http1.1 --retry 5 --retry-delay 2 -A asuna -o "$dest/tc.tgz" "$rest"
+              echo "unpack $(wc -c < "$dest/tc.tgz") bytes"
               mkdir -p "$dest/src"
               tar -C "$dest/src" -xf "$dest/tc.tgz"
-              bin=$(find "$dest/src" -type f -name clang -printf '%h\n' | head -n 1)
-              test -n "$bin"
-              echo "$bin" >> "$GITHUB_PATH"
+              take
               ;;
             *)
               echo "unknown toolchain: $TOOLCHAIN" >&2
