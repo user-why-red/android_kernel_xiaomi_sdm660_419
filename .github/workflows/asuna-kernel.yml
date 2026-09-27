@@ -1,0 +1,93 @@
+name: asuna-kernel
+run-name: ${{ inputs.build_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        required: true
+        type: string
+      branch:
+        required: true
+        type: string
+      defconfig:
+        required: true
+        type: string
+      revision:
+        required: true
+        type: string
+      localversion:
+        required: false
+        default: asuna
+        type: string
+      clang_tag:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 1
+
+      - name: packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison flex libssl-dev libelf-dev dwarves \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zstd zip
+
+      - name: neutron
+        env:
+          CLANG_TAG: ${{ inputs.clang_tag }}
+        run: |
+          case "$CLANG_TAG" in
+            *[!0-9]*) echo "bad clang tag" >&2; exit 1 ;;
+          esac
+          curl -fsSL -o clang.tar.zst \
+            "https://github.com/Neutron-Toolchains/clang-build-catalogue/releases/download/${CLANG_TAG}/neutron-clang-${CLANG_TAG}.tar.zst"
+          mkdir -p "$RUNNER_TEMP/neutron"
+          tar -I zstd -xf clang.tar.zst -C "$RUNNER_TEMP/neutron"
+          bin="$(find "$RUNNER_TEMP/neutron" -type d -name bin -print -quit)"
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: build
+        env:
+          DEFCONFIG: ${{ inputs.defconfig }}
+          REVISION: ${{ inputs.revision }}
+          LOCALVERSION: ${{ inputs.localversion }}
+        run: |
+          case "$DEFCONFIG" in
+            *..*|[[:space:]]*|/*|*[!A-Za-z0-9_./+-]*) echo "bad defconfig" >&2; exit 1 ;;
+          esac
+          case "$REVISION" in
+            4.4|4.19) ;;
+            *) echo "bad revision" >&2; exit 1 ;;
+          esac
+          export ARCH=arm64 LLVM=1 LLVM_IAS=1
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          if [ "$REVISION" = "4.4" ]; then
+            export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          else
+            export CROSS_COMPILE_COMPACT=arm-linux-gnueabi-
+          fi
+          if [ -n "$LOCALVERSION" ]; then
+            export LOCALVERSION="-${LOCALVERSION#-}"
+          fi
+          make -j"$(nproc)" O=out "$DEFCONFIG"
+          make -j"$(nproc)" O=out Image.gz-dtb
+          test -f out/arch/arm64/boot/Image.gz-dtb
+          zip -j kernel.zip out/arch/arm64/boot/Image.gz-dtb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ inputs.build_id }}
+          path: kernel.zip
+          if-no-files-found: error
