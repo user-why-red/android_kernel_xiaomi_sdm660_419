@@ -1,0 +1,135 @@
+# asuna-runner 5
+name: asuna-kernel
+run-name: ${{ inputs.build_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        required: true
+        type: string
+      branch:
+        required: true
+        type: string
+      defconfig:
+        required: true
+        type: string
+      localversion:
+        required: false
+        type: string
+        default: asuna
+      toolchain:
+        required: false
+        type: string
+        default: neutron:06092026
+      make_args:
+        required: false
+        type: string
+        default: "ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_COMPAT=arm-linux-gnueabi- LLVM=1 LLVM_IAS=1"
+      image_path:
+        required: false
+        type: string
+        default: arch/arm64/boot/Image.gz-dtb
+      ak3_url:
+        required: false
+        type: string
+        default: https://github.com/user-why-red/AnyKernel3/raw/san-kernel-sdm660-installer/San-Kernel-testbuild.zip
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 1
+      - name: packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends bc bison flex libssl-dev libelf-dev zip unzip curl ca-certificates gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+      - name: toolchain
+        env:
+          TOOLCHAIN: ${{ inputs.toolchain }}
+        run: |
+          set -eu
+          dest="$HOME/toolchains/asuna"
+          rm -rf "$dest"
+          mkdir -p "$dest"
+          take() {
+            bin=$(find "$dest/src" \( -type f -o -type l \) -name clang -print -quit)
+            if [ -z "$bin" ]; then
+              echo "clang not in archive" >&2
+              find "$dest/src" -maxdepth 4 -type d -name bin >&2 || true
+              exit 1
+            fi
+            dirname "$bin" >> "$GITHUB_PATH"
+          }
+          case "$TOOLCHAIN" in
+            neutron:*)
+              rest="${TOOLCHAIN#neutron:}"
+              mkdir -p "$HOME/toolchains/neutron-clang"
+              cd "$HOME/toolchains/neutron-clang"
+              bash <(curl -fsSL https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman) -S="$rest"
+              echo "$HOME/toolchains/neutron-clang/bin" >> "$GITHUB_PATH"
+              ;;
+            git:*)
+              rest="${TOOLCHAIN#git:}"
+              git clone --depth 1 "$rest" "$dest/src"
+              take
+              ;;
+            archive:*)
+              rest="${TOOLCHAIN#archive:}"
+              echo "fetch $rest"
+              curl -fL --http1.1 --retry 5 --retry-delay 2 -A asuna -o "$dest/tc.tgz" "$rest"
+              echo "unpack $(wc -c < "$dest/tc.tgz") bytes"
+              mkdir -p "$dest/src"
+              tar -C "$dest/src" -xf "$dest/tc.tgz"
+              take
+              ;;
+            *)
+              echo "unknown toolchain: $TOOLCHAIN" >&2
+              exit 1
+              ;;
+          esac
+      - name: make
+        env:
+          MAKE_ARGS: ${{ inputs.make_args }}
+          DEFCONFIG: ${{ inputs.defconfig }}
+          LOCALVERSION: ${{ inputs.localversion }}
+        run: |
+          set -euo pipefail
+          args=()
+          # shellcheck disable=SC2206
+          args=($MAKE_ARGS)
+          if [ -n "$LOCALVERSION" ]; then
+            args+=("LOCALVERSION=-$LOCALVERSION")
+          fi
+          make -j"$(nproc)" O=out "${args[@]}" "$DEFCONFIG"
+          make -j"$(nproc)" O=out "${args[@]}"
+      - name: zip
+        id: pack
+        env:
+          IMAGE_PATH: ${{ inputs.image_path }}
+          AK3_URL: ${{ inputs.ak3_url }}
+        run: |
+          set -euo pipefail
+          image="$GITHUB_WORKSPACE/out/$IMAGE_PATH"
+          test -f "$image"
+          curl -fsSL -o "$RUNNER_TEMP/ak3.zip" "$AK3_URL"
+          rm -rf "$RUNNER_TEMP/ak3"
+          mkdir -p "$RUNNER_TEMP/ak3"
+          unzip -q "$RUNNER_TEMP/ak3.zip" -d "$RUNNER_TEMP/ak3"
+          root="$(find "$RUNNER_TEMP/ak3" -name anykernel.sh -printf '%h\n' | head -n 1)"
+          test -n "$root"
+          base="$(basename "$IMAGE_PATH")"
+          rm -f "$root/Image" "$root/Image.gz" "$root/Image.gz-dtb" "$root/$base"
+          cp "$image" "$root/$base"
+          name="${GITHUB_REPOSITORY#*/}-$(TZ=Asia/Kolkata date +%Y%m%d-%H%M).zip"
+          (cd "$root" && zip -r9 "$RUNNER_TEMP/$name" .)
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "path=$RUNNER_TEMP/$name" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.name }}
+          path: ${{ steps.pack.outputs.path }}
+          if-no-files-found: error
