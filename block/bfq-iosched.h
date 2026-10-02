@@ -235,6 +235,7 @@ struct bfq_ttime {
 struct bfq_queue {
 	/* reference counter */
 	int ref;
+	int stable_ref;
 	/* parent bfq_data */
 	struct bfq_data *bfqd;
 
@@ -426,6 +427,7 @@ struct bfq_io_cq {
 	 */
 	bool was_in_burst_list;
 	bool stably_merged;
+	struct bfq_queue *stable_merge_bfqq;
 
 	/*
 	 * Save the weight when a merge occurs, to be able

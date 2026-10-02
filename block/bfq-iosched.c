@@ -172,6 +172,7 @@ BFQ_BFQQ_FNS(softrt_update);
 /* Expiration time of sync (0) and async (1) requests, in ns. */
 static const u64 bfq_fifo_expire[2] = { NSEC_PER_SEC / 4, NSEC_PER_SEC / 8 };
 static const unsigned long bfq_activation_stable_merging = 600;
+static const unsigned long bfq_late_stable_merging = 600;
 
 /* Maximum backwards seek (magic number lifted from CFQ), in KiB. */
 static const int bfq_back_max = 16 * 1024;
@@ -380,9 +381,20 @@ struct bfq_queue *bic_to_bfqq(struct bfq_io_cq *bic, bool is_sync)
 	return bic->bfqq[is_sync];
 }
 
+static void bfq_put_stable_ref(struct bfq_queue *bfqq);
+
 void bic_set_bfqq(struct bfq_io_cq *bic, struct bfq_queue *bfqq, bool is_sync)
 {
+	/*
+	 * A non-stable merge onto the queue this bic was going to
+	 * merge with would make that queue eligible to merge with
+	 * itself after a split. Drop the pending merge.
+	 */
 	bic->bfqq[is_sync] = bfqq;
+	if (bfqq && bic->stable_merge_bfqq == bfqq) {
+		bfq_put_stable_ref(bic->stable_merge_bfqq);
+		bic->stable_merge_bfqq = NULL;
+	}
 }
 
 struct bfq_data *bic_to_bfqd(struct bfq_io_cq *bic)
@@ -1069,7 +1081,7 @@ bfq_bfqq_resume_state(struct bfq_queue *bfqq, struct bfq_data *bfqd,
 static int bfqq_process_refs(struct bfq_queue *bfqq)
 {
 	return bfqq->ref - bfqq->allocated - bfqq->entity.on_st -
-		(bfqq->weight_counter != NULL);
+		(bfqq->weight_counter != NULL) - bfqq->stable_ref;
 }
 
 /* Empty burst list and add just bfqq (see comments on bfq_handle_burst) */
@@ -2550,6 +2562,9 @@ static bool bfq_may_be_close_cooperator(struct bfq_queue *bfqq,
  * requests than the ones produced by its originally-associated
  * process.
  */
+static bool idling_boosts_thr_without_issues(struct bfq_data *bfqd,
+					     struct bfq_queue *bfqq);
+
 static struct bfq_queue *
 bfq_setup_cooperator(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 		     void *io_struct, bool request)
@@ -2603,6 +2618,33 @@ bfq_setup_cooperator(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 	 */
 	if (likely(bfqd->nonrot_with_queueing))
 		return NULL;
+
+	if (bfq_bfqq_sync(bfqq) && bfqq->bic &&
+	    bfqq->bic->stable_merge_bfqq &&
+	    !bfq_bfqq_just_created(bfqq) &&
+	    time_is_before_jiffies(bfqq->split_time +
+				   msecs_to_jiffies(bfq_late_stable_merging)) &&
+	    time_is_before_jiffies(bfqq->creation_time +
+				   msecs_to_jiffies(bfq_late_stable_merging))) {
+		struct bfq_io_cq *bic = bfqq->bic;
+		struct bfq_queue *stable_merge_bfqq = bic->stable_merge_bfqq;
+		int proc_ref = min(bfqq_process_refs(bfqq),
+				   bfqq_process_refs(stable_merge_bfqq));
+
+		bfq_put_stable_ref(stable_merge_bfqq);
+		bic->stable_merge_bfqq = NULL;
+		if (!idling_boosts_thr_without_issues(bfqd, bfqq) &&
+		    proc_ref > 0) {
+			new_bfqq = bfq_setup_merge(bfqq, stable_merge_bfqq);
+			if (new_bfqq) {
+				bic->stably_merged = true;
+				if (new_bfqq->bic)
+					new_bfqq->bic->stably_merged = true;
+			}
+			return new_bfqq;
+		}
+		return NULL;
+	}
 
 	/*
 	 * Prevent bfqq from being merged if it has been created too
@@ -4919,6 +4961,12 @@ void bfq_put_queue(struct bfq_queue *bfqq)
 #endif
 }
 
+static void bfq_put_stable_ref(struct bfq_queue *bfqq)
+{
+	bfqq->stable_ref--;
+	bfq_put_queue(bfqq);
+}
+
 static void bfq_put_cooperator(struct bfq_queue *bfqq)
 {
 	struct bfq_queue *__bfqq, *next;
@@ -4974,6 +5022,21 @@ static void bfq_exit_icq_bfqq(struct bfq_io_cq *bic, bool is_sync)
 static void bfq_exit_icq(struct io_cq *icq)
 {
 	struct bfq_io_cq *bic = icq_to_bic(icq);
+
+	if (bic->stable_merge_bfqq) {
+		struct bfq_data *bfqd = bic->stable_merge_bfqq->bfqd;
+
+		if (bfqd) {
+			unsigned long flags;
+
+			spin_lock_irqsave(&bfqd->lock, flags);
+			bfq_put_stable_ref(bic->stable_merge_bfqq);
+			spin_unlock_irqrestore(&bfqd->lock, flags);
+		} else {
+			bfq_put_stable_ref(bic->stable_merge_bfqq);
+		}
+		bic->stable_merge_bfqq = NULL;
+	}
 
 	bfq_exit_icq_bfqq(bic, true);
 	bfq_exit_icq_bfqq(bic, false);
@@ -5179,10 +5242,16 @@ static struct bfq_queue *bfq_do_or_sched_stable_merge(struct bfq_data *bfqd,
 		*source_bfqq = bfqq;
 	else if (time_after_eq(last_bfqq_created->creation_time +
 			       bfqd->bfq_burst_interval,
-			       bfqq->creation_time) &&
-		 bfqd->nonrot_with_queueing)
-		bfqq = bfq_do_early_stable_merge(bfqd, bfqq, bic,
-						 last_bfqq_created);
+			       bfqq->creation_time)) {
+		if (bfqd->nonrot_with_queueing)
+			bfqq = bfq_do_early_stable_merge(bfqd, bfqq, bic,
+							 last_bfqq_created);
+		else if (!bic->stable_merge_bfqq) {
+			last_bfqq_created->ref++;
+			last_bfqq_created->stable_ref++;
+			bic->stable_merge_bfqq = last_bfqq_created;
+		}
+	}
 
 	return bfqq;
 }
