@@ -364,6 +364,8 @@ struct bfq_queue {
 
 	unsigned long split_time; /* time of last split */
 	unsigned long creation_time;
+	u64 io_start_time;
+	u64 tot_idle_time;
 
 	unsigned long first_IO_time; /* time of first I/O for this queue */
 
@@ -415,6 +417,8 @@ struct bfq_io_cq {
 	 * classification of a queue.
 	 */
 	bool saved_IO_bound;
+	u64 saved_io_start_time;
+	u64 saved_tot_idle_time;
 
 	/*
 	 * Same purpose as the previous fields for the value of the
