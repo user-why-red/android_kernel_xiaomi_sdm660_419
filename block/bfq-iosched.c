@@ -171,6 +171,7 @@ BFQ_BFQQ_FNS(softrt_update);
 
 /* Expiration time of sync (0) and async (1) requests, in ns. */
 static const u64 bfq_fifo_expire[2] = { NSEC_PER_SEC / 4, NSEC_PER_SEC / 8 };
+static const unsigned long bfq_activation_stable_merging = 600;
 
 /* Maximum backwards seek (magic number lifted from CFQ), in KiB. */
 static const int bfq_back_max = 16 * 1024;
@@ -1690,7 +1691,8 @@ static void bfq_bfqq_handle_idle_busy_switch(struct bfq_data *bfqd,
 	wr_or_deserves_wr = bfqd->low_latency &&
 		(bfqq->wr_coeff > 1 ||
 		 (bfq_bfqq_sync(bfqq) &&
-		  bfqq->bic && (*interactive || soft_rt)));
+		  (bfqq->bic || RQ_BIC(rq)->stably_merged) &&
+		  (*interactive || soft_rt)));
 
 	/*
 	 * Using the last flag, update budget and check whether bfqq
@@ -2785,6 +2787,11 @@ bfq_merge_bfqqs(struct bfq_data *bfqd, struct bfq_io_cq *bic,
 	 */
 	new_bfqq->pid = -1;
 	bfqq->bic = NULL;
+	if (bfqq->entity.parent &&
+	    bfqq->entity.parent->last_bfqq_created == bfqq)
+		bfqq->entity.parent->last_bfqq_created = new_bfqq;
+	else if (bfqd->last_bfqq_created == bfqq)
+		bfqd->last_bfqq_created = new_bfqq;
 	bfq_release_process_ref(bfqd, bfqq);
 }
 
@@ -4900,6 +4907,12 @@ void bfq_put_queue(struct bfq_queue *bfqq)
 	if (bfqq->bfqd && bfqq->bfqd->last_completed_rq_bfqq == bfqq)
 		bfqq->bfqd->last_completed_rq_bfqq = NULL;
 
+	if (bfqq->entity.parent &&
+	    bfqq->entity.parent->last_bfqq_created == bfqq)
+		bfqq->entity.parent->last_bfqq_created = NULL;
+	else if (bfqq->bfqd && bfqq->bfqd->last_bfqq_created == bfqq)
+		bfqq->bfqd->last_bfqq_created = NULL;
+
 	kmem_cache_free(bfq_pool, bfqq);
 #ifdef CONFIG_BFQ_GROUP_IOSCHED
 	bfqg_and_blkg_put(bfqg);
@@ -5020,7 +5033,7 @@ bfq_set_next_ioprio_data(struct bfq_queue *bfqq, struct bfq_io_cq *bic)
 
 static struct bfq_queue *bfq_get_queue(struct bfq_data *bfqd,
 				       struct bio *bio, bool is_sync,
-				       struct bfq_io_cq *bic);
+				       struct bfq_io_cq *bic, bool respawn);
 
 static void bfq_check_ioprio_change(struct bfq_io_cq *bic, struct bio *bio)
 {
@@ -5040,7 +5053,7 @@ static void bfq_check_ioprio_change(struct bfq_io_cq *bic, struct bio *bio)
 	bfqq = bic_to_bfqq(bic, false);
 	if (bfqq) {
 		bfq_release_process_ref(bfqd, bfqq);
-		bfqq = bfq_get_queue(bfqd, bio, BLK_RW_ASYNC, bic);
+		bfqq = bfq_get_queue(bfqd, bio, BLK_RW_ASYNC, bic, false);
 		bic_set_bfqq(bic, bfqq, false);
 	}
 
@@ -5080,6 +5093,7 @@ static void bfq_init_bfqq(struct bfq_data *bfqd, struct bfq_queue *bfqq,
 
 	/* set end request to minus infinity from now */
 	bfqq->ttime.last_end_request = ktime_get_ns() + 1;
+	bfqq->creation_time = jiffies;
 
 	bfq_mark_bfqq_IO_bound(bfqq);
 
@@ -5128,9 +5142,54 @@ static struct bfq_queue **bfq_async_queue_prio(struct bfq_data *bfqd,
 	}
 }
 
+static struct bfq_queue *
+bfq_do_early_stable_merge(struct bfq_data *bfqd, struct bfq_queue *bfqq,
+			  struct bfq_io_cq *bic,
+			  struct bfq_queue *last_bfqq_created)
+{
+	struct bfq_queue *new_bfqq = bfq_setup_merge(bfqq, last_bfqq_created);
+
+	if (!new_bfqq)
+		return bfqq;
+
+	if (new_bfqq->bic)
+		new_bfqq->bic->stably_merged = true;
+	bic->stably_merged = true;
+	bfqq->bic = bic;
+	bfq_merge_bfqqs(bfqd, bic, bfqq, new_bfqq);
+	return new_bfqq;
+}
+
+static struct bfq_queue *bfq_do_or_sched_stable_merge(struct bfq_data *bfqd,
+						      struct bfq_queue *bfqq,
+						      struct bfq_io_cq *bic)
+{
+	struct bfq_queue **source_bfqq = bfqq->entity.parent ?
+		&bfqq->entity.parent->last_bfqq_created :
+		&bfqd->last_bfqq_created;
+	struct bfq_queue *last_bfqq_created = *source_bfqq;
+
+	if (!last_bfqq_created ||
+	    time_before(last_bfqq_created->creation_time +
+			msecs_to_jiffies(bfq_activation_stable_merging),
+			bfqq->creation_time) ||
+	    bfqq->entity.parent != last_bfqq_created->entity.parent ||
+	    bfqq->ioprio != last_bfqq_created->ioprio ||
+	    bfqq->ioprio_class != last_bfqq_created->ioprio_class)
+		*source_bfqq = bfqq;
+	else if (time_after_eq(last_bfqq_created->creation_time +
+			       bfqd->bfq_burst_interval,
+			       bfqq->creation_time) &&
+		 bfqd->nonrot_with_queueing)
+		bfqq = bfq_do_early_stable_merge(bfqd, bfqq, bic,
+						 last_bfqq_created);
+
+	return bfqq;
+}
+
 static struct bfq_queue *bfq_get_queue(struct bfq_data *bfqd,
 				       struct bio *bio, bool is_sync,
-				       struct bfq_io_cq *bic)
+				       struct bfq_io_cq *bic, bool respawn)
 {
 	const int ioprio = IOPRIO_PRIO_DATA(bic->ioprio);
 	const int ioprio_class = IOPRIO_PRIO_CLASS(bic->ioprio);
@@ -5188,6 +5247,8 @@ static struct bfq_queue *bfq_get_queue(struct bfq_data *bfqd,
 
 out:
 	bfqq->ref++; /* get a process reference to this queue */
+	if (bfqq != &bfqd->oom_bfqq && is_sync && !respawn)
+		bfqq = bfq_do_or_sched_stable_merge(bfqd, bfqq, bic);
 	bfq_log_bfqq(bfqd, bfqq, "get_queue, at end: %p, %d", bfqq, bfqq->ref);
 	rcu_read_unlock();
 	return bfqq;
@@ -6017,7 +6078,7 @@ static struct bfq_queue *bfq_get_bfqq_handle_split(struct bfq_data *bfqd,
 
 	if (bfqq)
 		bfq_put_queue(bfqq);
-	bfqq = bfq_get_queue(bfqd, bio, is_sync, bic);
+	bfqq = bfq_get_queue(bfqd, bio, is_sync, bic, split);
 
 	bic_set_bfqq(bic, bfqq, is_sync);
 	if (split && is_sync) {
@@ -6138,7 +6199,8 @@ static struct bfq_queue *bfq_init_rq(struct request *rq)
 
 	if (likely(!new_queue)) {
 		/* If the queue was seeky for too long, break it apart. */
-		if (bfq_bfqq_coop(bfqq) && bfq_bfqq_split_coop(bfqq)) {
+		if (bfq_bfqq_coop(bfqq) && bfq_bfqq_split_coop(bfqq) &&
+		    !bic->stably_merged) {
 			bfq_log_bfqq(bfqd, bfqq, "breaking apart bfqq");
 
 			/* Update bic before losing reference to bfqq */

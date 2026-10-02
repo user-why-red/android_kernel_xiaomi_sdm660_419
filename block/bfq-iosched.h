@@ -187,6 +187,7 @@ struct bfq_entity {
 
 	/* parent entity, for hierarchical scheduling */
 	struct bfq_entity *parent;
+	struct bfq_queue *last_bfqq_created;
 
 	/*
 	 * For non-leaf nodes in the hierarchy, the associated
@@ -361,6 +362,7 @@ struct bfq_queue {
 	unsigned long wr_start_at_switch_to_srt;
 
 	unsigned long split_time; /* time of last split */
+	unsigned long creation_time;
 
 	unsigned long first_IO_time; /* time of first I/O for this queue */
 
@@ -423,6 +425,7 @@ struct bfq_io_cq {
 	 * with another cooperating queue.
 	 */
 	bool was_in_burst_list;
+	bool stably_merged;
 
 	/*
 	 * Save the weight when a merge occurs, to be able
@@ -564,6 +567,7 @@ struct bfq_data {
 
 	/* bfqq owning the last completed rq */
 	struct bfq_queue *last_completed_rq_bfqq;
+	struct bfq_queue *last_bfqq_created;
 
 	/* time of last transition from empty to non-empty (ns) */
 	u64 last_empty_occupied_ns;
