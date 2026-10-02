@@ -678,7 +678,7 @@ config TCP_CONG_CDG
 
 config TCP_CONG_BBR
 	tristate "BBR TCP"
-	default n
+	default y
 	help
 
 	  BBR (Bottleneck Bandwidth and RTT) TCP congestion control aims to
@@ -693,7 +693,7 @@ config TCP_CONG_BBR
 
 choice
 	prompt "Default TCP congestion control"
-	default DEFAULT_CUBIC
+	default DEFAULT_BBR
 	help
 	  Select the TCP congestion control that will be used by default
 	  for all connections.
