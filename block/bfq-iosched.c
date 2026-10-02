@@ -167,7 +167,6 @@ BFQ_BFQQ_FNS(in_large_burst);
 BFQ_BFQQ_FNS(coop);
 BFQ_BFQQ_FNS(split_coop);
 BFQ_BFQQ_FNS(softrt_update);
-BFQ_BFQQ_FNS(has_waker);
 #undef BFQ_BFQQ_FNS						\
 
 /* Expiration time of sync (0) and async (1) requests, in ns. */
@@ -1869,6 +1868,34 @@ static void bfq_reset_inject_limit(struct bfq_data *bfqd,
 	bfqq->decrease_time_jif = jiffies;
 }
 
+static void bfq_check_waker(struct bfq_data *bfqd, struct bfq_queue *bfqq,
+			    u64 now_ns)
+{
+	if (!bfqd->last_completed_rq_bfqq ||
+	    bfqd->last_completed_rq_bfqq == bfqq ||
+	    bfq_bfqq_has_short_ttime(bfqq) ||
+	    now_ns - bfqd->last_completion >= 4 * NSEC_PER_MSEC)
+		return;
+
+	if (bfqd->last_completed_rq_bfqq != bfqq->tentative_waker_bfqq) {
+		bfqq->tentative_waker_bfqq = bfqd->last_completed_rq_bfqq;
+		bfqq->num_waker_detections = 1;
+	} else {
+		bfqq->num_waker_detections++;
+	}
+
+	if (bfqq->num_waker_detections != 3)
+		return;
+
+	bfqq->waker_bfqq = bfqd->last_completed_rq_bfqq;
+	bfqq->tentative_waker_bfqq = NULL;
+
+	if (!hlist_unhashed(&bfqq->woken_list_node))
+		hlist_del_init(&bfqq->woken_list_node);
+	hlist_add_head(&bfqq->woken_list_node,
+		       &bfqd->last_completed_rq_bfqq->woken_list);
+}
+
 static void bfq_add_request(struct request *rq)
 {
 	struct bfq_queue *bfqq = RQ_BFQQ(rq);
@@ -1903,20 +1930,12 @@ static void bfq_add_request(struct request *rq)
 		 * this aspect, see the comments on the choice of the
 		 * queue for injection in bfq_select_queue().
 		 *
-		 * Turning back to the detection of a waker queue, a
-		 * queue Q is deemed as a waker queue for bfqq if, for
-		 * two consecutive times, bfqq happens to become non
-		 * empty right after a request of Q has been
-		 * completed. In particular, on the first time, Q is
-		 * tentatively set as a candidate waker queue, while
-		 * on the second time, the flag
-		 * bfq_bfqq_has_waker(bfqq) is set to confirm that Q
-		 * is a waker queue for bfqq. These detection steps
-		 * are performed only if bfqq has a long think time,
-		 * so as to make it more likely that bfqq's I/O is
-		 * actually being blocked by a synchronization. This
-		 * last filter, plus the above two-times requirement,
-		 * make false positives less likely.
+		 * Turning back to the detection of a waker queue, Q is
+		 * a candidate until the same queue has been seen three
+		 * times within 4 ms. Only then is it recorded as the
+		 * waker. Detection runs only if bfqq has a long think
+		 * time, so a chance completion is not treated as a
+		 * synchronization.
 		 *
 		 * NOTE
 		 *
@@ -1936,57 +1955,7 @@ static void bfq_add_request(struct request *rq)
 		 * confirmed no later than during the next
 		 * I/O-plugging interval for bfqq.
 		 */
-		if (bfqd->last_completed_rq_bfqq &&
-		    !bfq_bfqq_has_short_ttime(bfqq) &&
-		    ktime_get_ns() - bfqd->last_completion <
-		    200 * NSEC_PER_USEC) {
-			if (bfqd->last_completed_rq_bfqq != bfqq &&
-			    bfqd->last_completed_rq_bfqq !=
-			    bfqq->waker_bfqq) {
-				/*
-				 * First synchronization detected with
-				 * a candidate waker queue, or with a
-				 * different candidate waker queue
-				 * from the current one.
-				 */
-				bfqq->waker_bfqq = bfqd->last_completed_rq_bfqq;
-
-				/*
-				 * If the waker queue disappears, then
-				 * bfqq->waker_bfqq must be reset. To
-				 * this goal, we maintain in each
-				 * waker queue a list, woken_list, of
-				 * all the queues that reference the
-				 * waker queue through their
-				 * waker_bfqq pointer. When the waker
-				 * queue exits, the waker_bfqq pointer
-				 * of all the queues in the woken_list
-				 * is reset.
-				 *
-				 * In addition, if bfqq is already in
-				 * the woken_list of a waker queue,
-				 * then, before being inserted into
-				 * the woken_list of a new waker
-				 * queue, bfqq must be removed from
-				 * the woken_list of the old waker
-				 * queue.
-				 */
-				if (!hlist_unhashed(&bfqq->woken_list_node))
-					hlist_del_init(&bfqq->woken_list_node);
-				hlist_add_head(&bfqq->woken_list_node,
-				    &bfqd->last_completed_rq_bfqq->woken_list);
-
-				bfq_clear_bfqq_has_waker(bfqq);
-			} else if (bfqd->last_completed_rq_bfqq ==
-				   bfqq->waker_bfqq &&
-				   !bfq_bfqq_has_waker(bfqq)) {
-				/*
-				 * synchronization with waker_bfqq
-				 * seen for the second time
-				 */
-				bfq_mark_bfqq_has_waker(bfqq);
-			}
-		}
+		bfq_check_waker(bfqd, bfqq, ktime_get_ns());
 
 		/*
 		 * Periodically reset inject limit, to make sure that
@@ -4507,7 +4476,7 @@ check_queue:
 		    bfq_serv_to_charge(async_bfqq->next_rq, async_bfqq) <=
 		    bfq_bfqq_budget_left(async_bfqq))
 			bfqq = bfqq->bic->bfqq[0];
-		else if (bfq_bfqq_has_waker(bfqq) &&
+		else if (bfqq->waker_bfqq &&
 			   bfq_bfqq_busy(bfqq->waker_bfqq) &&
 			   bfqq->waker_bfqq->next_rq &&
 			   bfq_serv_to_charge(bfqq->waker_bfqq->next_rq,
@@ -4902,7 +4871,8 @@ void bfq_put_queue(struct bfq_queue *bfqq)
 	hlist_for_each_entry_safe(item, n, &bfqq->woken_list,
 				  woken_list_node) {
 		item->waker_bfqq = NULL;
-		bfq_clear_bfqq_has_waker(item);
+		item->tentative_waker_bfqq = NULL;
+		item->num_waker_detections = 0;
 		hlist_del_init(&item->woken_list_node);
 	}
 
