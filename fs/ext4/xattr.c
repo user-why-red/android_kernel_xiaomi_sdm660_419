@@ -2073,6 +2073,7 @@ inserted:
 					 * Undo everything and check mbcache
 					 * again.
 					 */
+					ce->e_reusable = 0;
 					unlock_buffer(new_bh);
 					dquot_free_block(inode,
 							 EXT4_C2B(EXT4_SB(sb),
@@ -2803,6 +2804,7 @@ retry:
 		    s_min_extra_isize) {
 			tried_min_extra_isize++;
 			new_extra_isize = s_min_extra_isize;
+			error = 0;
 			goto retry;
 		}
 		goto cleanup;

@@ -80,6 +80,16 @@ static DEFINE_PER_CPU(struct sugov_tunables *, cached_tunables);
 
 /************************ Governor internals ***********************/
 
+static void sugov_update_rate_limit_us(struct sugov_policy *sg_policy)
+{
+        sg_policy->up_rate_delay_ns =
+                (s64)sg_policy->tunables->up_rate_limit_us * NSEC_PER_USEC;
+        sg_policy->down_rate_delay_ns =
+                (s64)sg_policy->tunables->down_rate_limit_us * NSEC_PER_USEC;
+        sg_policy->min_rate_limit_ns = min(sg_policy->up_rate_delay_ns,
+                                           sg_policy->down_rate_delay_ns);
+}
+
 static bool sugov_should_update_freq(struct sugov_policy *sg_policy, u64 time)
 {
 	s64 delta_ns;
