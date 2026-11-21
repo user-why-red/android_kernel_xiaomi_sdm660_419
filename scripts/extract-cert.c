@@ -21,7 +21,9 @@
 #include <openssl/bio.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
+#if OPENSSL_VERSION_MAJOR < 4
 #include <openssl/engine.h>
+#endif
 
 /*
  * OpenSSL 3.0 deprecates the OpenSSL's ENGINE API.
@@ -57,6 +59,7 @@ static void display_openssl_errors(int l)
 }
 
 #ifndef OPENSSL_IS_BORINGSSL
+#if OPENSSL_VERSION_MAJOR < 4
 static void drain_openssl_errors(void)
 {
 	const char *file;
@@ -66,6 +69,7 @@ static void drain_openssl_errors(void)
 		return;
 	while (ERR_get_error_line(&file, &line)) {}
 }
+#endif
 #endif
 
 #define ERR(cond, fmt, ...)				\
@@ -77,7 +81,9 @@ static void drain_openssl_errors(void)
 		}					\
 	} while(0)
 
+#if OPENSSL_VERSION_MAJOR < 4
 static const char *key_pass;
+#endif
 static BIO *wb;
 static char *cert_dst;
 int kbuild_verbose;
@@ -106,7 +112,9 @@ int main(int argc, char **argv)
 
 	kbuild_verbose = atoi(getenv("KBUILD_VERBOSE")?:"0");
 
+#if OPENSSL_VERSION_MAJOR < 4
         key_pass = getenv("KBUILD_SIGN_PIN");
+#endif
 
 	if (argc != 3)
 		format();
@@ -120,7 +128,11 @@ int main(int argc, char **argv)
 		ERR(!f, "%s", cert_dst);
 		fclose(f);
 		exit(0);
-	} else if (!strncmp(cert_src, "pkcs11:", 7)) {
+} else if (!strncmp(cert_src, "pkcs11:", 7)) {
+#if OPENSSL_VERSION_MAJOR >= 4
+            ERR(1, "PKCS#11 not supported with OpenSSL >= 4 (ENGINE API removed)");
+            exit(1);
+#else
 #ifdef OPENSSL_IS_BORINGSSL
 		ERR(1, "BoringSSL does not support extracting from PKCS#11");
 		exit(1);
@@ -148,7 +160,8 @@ int main(int argc, char **argv)
 		ERR(!parms.cert, "Get X.509 from PKCS#11");
 		write_cert(parms.cert);
 #endif
-	} else {
+#endif
+    } else {
 		BIO *b;
 		X509 *x509;
 
